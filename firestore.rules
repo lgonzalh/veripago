@@ -40,15 +40,18 @@ service cloud.firestore {
     }
 
     match /payment_links/{linkId} {
-      allow get, list: if (resource.data.isActive == true)
-        || (signedInWithGoogle() && request.auth.uid == resource.data.merchantId)
-        || isAdmin();
-      allow create: if signedInWithGoogle()
-        && request.resource.data.merchantId == request.auth.uid
-        && isMerchant(request.auth.uid)
-        && request.resource.data.isActive is bool;
-      allow update, delete: if signedInWithGoogle()
-        && (isMerchant(resource.data.merchantId) || isAdmin());
+      allow get, list: if (signedInWithGoogle()
+        && (request.auth.uid == resource.data.merchantId || isAdmin()));
+      // Creation and slug reservation run in a trusted transaction to enforce uniqueness.
+      allow create: if false;
+      allow update, delete: if false;
+    }
+
+    match /public_payment_links/{slug} {
+      // Public checkout uses a document key lookup. Listing the public catalog is denied.
+      allow get: if resource.data.isActive == true;
+      allow list: if false;
+      allow write: if false;
     }
 
     match /orders/{orderId} {
@@ -75,7 +78,8 @@ service cloud.firestore {
     match /checkout_sessions/{sessionId} {
       // The random session ID is a bearer capability. Store only safe status fields here;
       // personal data and order items belong in the private orders collection.
-      allow get: if true;
+      allow get: if resource.data.expiresAt is timestamp
+        && resource.data.expiresAt > request.time;
       allow list: if false;
       allow create, update, delete: if false;
     }
@@ -104,7 +108,8 @@ service cloud.firestore {
     }
 
     match /platform_settings/{settingId} {
-      allow read: if signedInWithGoogle();
+      allow get: if settingId == 'global' || signedInWithGoogle();
+      allow list: if signedInWithGoogle();
       allow write: if isAdmin();
     }
 

@@ -10,7 +10,9 @@ All timestamps are Firestore `Timestamp` values in UTC. Money is an integer numb
 
 ### `payment_links/{linkId}`
 
-`merchantId`, `slug`, `title`, `defaultMode` (`IN_SITU_QR | WHATSAPP_LINK`), `schemaJson`, `qrImageUrl`, `paymentKeyLabel`, `beneficiaryName`, `reconciliationWindowMinutes`, `isActive`, `createdAt`. `slug` is normalized lowercase and unique; Firestore has no unique constraint, so production creation must reserve it transactionally through a `slugs/{slug}` record (server endpoint). Public reads expose only active links. Avoid storing private customer data here.
+`merchantId`, `slug`, `title`, `defaultMode` (`IN_SITU_QR | WHATSAPP_LINK`), `schemaJson`, `qrImageUrl`, `paymentKeyLabel`, `beneficiaryName`, `reconciliationWindowMinutes`, `isActive`, `createdAt`. `slug` is normalized lowercase and unique; Firestore has no unique constraint, so production creation reserves it transactionally through `slug_reservations/{slug}` (server endpoint).
+
+The public checkout reads `public_payment_links/{slug}` by document ID. It contains only the active payment link fields needed by the checkout and never allows list access. The private `payment_links/{linkId}` collection is readable only by the owning merchant and administrators. Trusted server code updates both copies atomically. Avoid storing private customer data in either link document.
 
 ### `orders/{orderId}`
 
@@ -57,7 +59,7 @@ Append-only server records: `actorUid`, `actorRole`, `action`, `entityType`, `en
 ## Security and operational notes
 
 - Google provider authentication is required for account data. The initial profile cannot self-assign `ADMINISTRADOR`.
-- Public checkout uses a minimal, expiring, random-ID session; Firestore rules cannot redact fields from a document, so a public reader must never be granted access to `orders`.
+- Public checkout resolves a slug by exact document ID in `public_payment_links`; rules deny listing. It uses a minimal, expiring, random-ID session; Firestore rules cannot redact fields from a document, so a public reader must never be granted access to `orders`.
 - Firestore client rules cannot enforce uniqueness of `slug` or atomic order reconciliation across arbitrary queries; use trusted server transactions for both.
 - QR files and APK releases are public-readable by product requirement. Do not commit QR images containing account identifiers into a public Git repository.
 - Admin access based on a mutable Firestore role is appropriate only if role changes are tightly guarded; production hardening should also move administrator authorization to Firebase custom claims managed by trusted server code.

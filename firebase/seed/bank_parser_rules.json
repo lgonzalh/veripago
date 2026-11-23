@@ -3,7 +3,7 @@
     "ruleId": "nequi-transfer-v1",
     "walletName": "Nequi",
     "androidPackage": "com.nequi.MobileApp",
-    "amountRegex": "(?i)(?:te\\s+)?(?:lleg[oó]|recibiste|recib[ií])\\s*\\$?\\s*([0-9][0-9.,]*)\\s*(?:COP|pesos)?",
+    "amountRegex": "(?i)(?:te\\s+)?(?:lleg(?:aron|ó|o)|recibiste|recib[ií]).*?\\$?\\s*([0-9][0-9.,]*)\\s*(?:COP|pesos)?",
     "senderRegex": "(?i)(?:de|enviado\\s+por|remitente)\\s*[:\\-]?\\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑa-záéíóúñ ]{2,60})",
     "isActive": false,
     "updatedAt": null,
