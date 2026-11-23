@@ -2,8 +2,12 @@ package com.lantonium.veripago.ui
 
 import android.app.Activity
 import android.content.Intent
+import android.graphics.ImageDecoder
+import android.graphics.drawable.AnimatedImageDrawable
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
+import android.widget.ImageView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -57,6 +61,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -76,6 +81,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.CustomCredential
@@ -163,7 +169,7 @@ fun VeriPagoApp(activity: Activity) {
                 }
             }
         }
-        val splashTimeRemaining = 1_500L - (System.currentTimeMillis() - splashStartedAt)
+        val splashTimeRemaining = 3_000L - (System.currentTimeMillis() - splashStartedAt)
         if (splashTimeRemaining > 0) delay(splashTimeRemaining)
         loading = false
     }
@@ -249,16 +255,7 @@ fun VeriPagoApp(activity: Activity) {
                 Modifier.fillMaxSize().padding(padding).background(Color(0xFF071A32)),
                 contentAlignment = Alignment.Center,
             ) {
-                AsyncImage(
-                    model = remember {
-                        ImageRequest.Builder(context)
-                            .data(R.drawable.veripago_splash)
-                            .decoderFactory(GifDecoder.Factory())
-                            .build()
-                    },
-                    contentDescription = "Animación de inicio de VeriPago",
-                    modifier = Modifier.fillMaxWidth().height(500.dp).padding(horizontal = 36.dp),
-                )
+                VeriPagoAnimatedSplash(Modifier.fillMaxWidth().height(500.dp).padding(horizontal = 36.dp))
             }
         } else if (profile == null) {
             LandingScreen(
@@ -283,6 +280,44 @@ fun VeriPagoApp(activity: Activity) {
         }
     }
 
+}
+
+@Composable
+private fun VeriPagoAnimatedSplash(modifier: Modifier) {
+    val context = LocalContext.current
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        val drawable = remember(context) {
+            runCatching {
+                ImageDecoder.decodeDrawable(ImageDecoder.createSource(context.resources, R.drawable.veripago_splash))
+                    as? AnimatedImageDrawable
+            }.getOrNull()
+        }
+        DisposableEffect(drawable) {
+            drawable?.start()
+            onDispose { drawable?.stop() }
+        }
+        AndroidView(
+            modifier = modifier,
+            factory = { viewContext ->
+                ImageView(viewContext).apply {
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    setImageDrawable(drawable)
+                }
+            },
+            update = { it.setImageDrawable(drawable) },
+        )
+    } else {
+        AsyncImage(
+            model = remember {
+                ImageRequest.Builder(context)
+                    .data(R.drawable.veripago_splash)
+                    .decoderFactory(GifDecoder.Factory())
+                    .build()
+            },
+            contentDescription = "Animación de inicio de VeriPago",
+            modifier = modifier,
+        )
+    }
 }
 
 @Composable
