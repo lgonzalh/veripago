@@ -74,6 +74,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -215,9 +216,12 @@ fun VeriPagoApp(activity: Activity) {
         topBar = {
             TopAppBar(
                 title = { Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(31.dp).clip(RoundedCornerShape(10.dp)).background(Navy), contentAlignment = Alignment.Center) {
-                        Text("V", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 19.sp)
-                    }
+                    Image(
+                        painter = painterResource(R.drawable.veripago_mark),
+                        contentDescription = "Logo VeriPago",
+                        modifier = Modifier.size(40.dp).clip(RoundedCornerShape(11.dp)),
+                        contentScale = ContentScale.Crop,
+                    )
                     Spacer(Modifier.width(9.dp))
                     Column { Text("VeriPago", color = Navy, fontWeight = FontWeight.Bold, fontSize = 17.sp); Text("ECOSISTEMA DE PAGOS", color = Muted, fontSize = 8.sp, letterSpacing = 1.2.sp) }
                 } },
