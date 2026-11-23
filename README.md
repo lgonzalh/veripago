@@ -30,7 +30,7 @@ Conecta los pedidos configurados por el comercio con las notificaciones reales d
 ```mermaid
 flowchart LR
     subgraph Cliente["Comprador (Web / Móvil)"]
-        W["Link de Pedido<br/>[lantonium.com/VeriPago/slug](https://lantonium.com/VeriPago/slug)"]
+        W["Link de Pedido<br/>Ruta: /VeriPago/:slug"]
     end
 
     subgraph Firebase["Infraestructura Firebase"]
