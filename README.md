@@ -30,33 +30,32 @@ Conecta los pedidos configurados por el comercio con las notificaciones reales d
 ```mermaid
 flowchart LR
     subgraph Cliente["Comprador (Web / Móvil)"]
-        W[Link de Pedido<br/>[lantonium.com/VeriPago/slug](https://lantonium.com/VeriPago/slug)]
+        W["Link de Pedido<br/>[lantonium.com/VeriPago/slug](https://lantonium.com/VeriPago/slug)"]
     end
 
     subgraph Firebase["Infraestructura Firebase"]
-        AUTH[Firebase Auth<br/>Google Sign-In]
-        FS[(Cloud Firestore<br/>Tiempo Real)]
-        ST[Firebase Storage<br/>Códigos QR + APK]
-        HOST[Firebase Hosting<br/>SPA React]
+        AUTH["Firebase Auth<br/>Google Sign-In"]
+        FS[("Cloud Firestore<br/>Tiempo Real")]
+        ST["Firebase Storage<br/>Códigos QR + APK"]
+        HOST["Firebase Hosting<br/>SPA React"]
     end
 
     subgraph Android["Celular del Comerciante (Android)"]
-        NL[NotificationListenerService<br/>Nequi / Daviplata / Bre-B]
-        SQL[(SQLite - Room<br/>Caché + Outbox)]
-        TTS[TextToSpeech<br/>Alerta de Voz]
+        NL["NotificationListenerService<br/>Nequi / Daviplata / Bre-B"]
+        SQL[("SQLite - Room<br/>Caché + Outbox")]
+        TTS["TextToSpeech<br/>Alerta de Voz"]
     end
 
-    W <-->|onSnapshot| FS
+    W <-->|"onSnapshot"| FS
     HOST --> W
-    NL -->|1. Intercepta abono| SQL
-    SQL -->|2. Anuncia pago| TTS
-    SQL <-->|3. Sincroniza estado| FS
+    NL -->|"1. Intercepta abono"| SQL
+    SQL -->|"2. Anuncia pago"| TTS
+    SQL <-->|"3. Sincroniza estado"| FS
     AUTH --> HOST
     AUTH --> Android
     ST --> W
     ST --> Android
 ```
-
 ---
 
 ## 🛠️ Stack Tecnológico
