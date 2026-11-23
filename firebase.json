@@ -3,8 +3,10 @@
     "site": "veripago-9cda6",
     "public": "dist",
     "ignore": ["firebase.json", ".firebaserc", "**/.*", "**/node_modules/**"],
+    "redirects": [
+      { "source": "/", "destination": "/VeriPago/", "type": 301 }
+    ],
     "rewrites": [
-      { "source": "/", "destination": "/VeriPago/index.html" },
       { "source": "/VeriPago", "destination": "/VeriPago/index.html" },
       { "source": "/VeriPago/**", "destination": "/VeriPago/index.html" }
     ],
