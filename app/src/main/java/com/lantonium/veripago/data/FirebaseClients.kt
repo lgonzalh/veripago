@@ -77,40 +77,36 @@ class ProfileCache(private val context: Context) {
         val preferences = context.profileStore.data.first()
         val uid = preferences[uidKey] ?: return null
         return UserProfile(uid, preferences[emailKey].orEmpty(), preferences[nameKey].orEmpty(),
-            preferences[photoKey].orEmpty(), preferences[roleKey] ?: "USUARIO", true, 0)
+            preferences[photoKey].orEmpty(), preferences[roleKey] ?: "COMERCIANTE", true, 0)
     }
 
     suspend fun clear() { context.profileStore.edit { it.clear() } }
 }
 
 class GoogleAuthRepository(private val context: Context, private val cache: ProfileCache) {
-    suspend fun signIn(idToken: String, initialRole: String): UserProfile {
+    suspend fun signIn(idToken: String): UserProfile {
         val auth = FirebaseClients.auth ?: error("Firebase no está configurado en este build.")
         val result = auth.signInWithCredential(com.google.firebase.auth.GoogleAuthProvider.getCredential(idToken, null)).await()
         val user = result.user ?: error("Google no devolvió un usuario.")
         val database = FirebaseClients.firestore ?: error("Firestore no está disponible.")
         val reference = database.collection("users").document(user.uid)
         val snapshot = reference.get().await()
-        val profile = if (snapshot.exists()) {
-            UserProfile(user.uid, snapshot.getString("email").orEmpty(), snapshot.getString("displayName").orEmpty(),
-                snapshot.getString("photoUrl").orEmpty(), snapshot.getString("role") ?: "USUARIO",
-                snapshot.getBoolean("isActive") ?: true, snapshot.getLong("loyaltyPoints") ?: 0L)
-        } else {
-            val created = UserProfile(user.uid, user.email.orEmpty(), user.displayName.orEmpty(), user.photoUrl?.toString().orEmpty(), initialRole, true, 0)
-            reference.set(mapOf(
-                "uid" to created.uid,
-                "email" to created.email,
-                "displayName" to created.displayName,
-                "photoUrl" to created.photoUrl,
-                "role" to initialRole,
-                "isActive" to true,
-                "quotaMaxLinks" to 10,
-                "loyaltyPoints" to 0,
-                "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
-                "lastLoginAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
-            )).await()
-            created
+        if (!snapshot.exists()) {
+            auth.signOut()
+            error("Primero registra tu perfil de comerciante en la web de VeriPago.")
         }
+        val role = snapshot.getString("role").orEmpty()
+        if (role != "COMERCIANTE" && role != "ADMINISTRADOR") {
+            auth.signOut()
+            error("Los compradores no inician sesión. Paga con el enlace o el QR del comercio.")
+        }
+        if (snapshot.getBoolean("isActive") != true) {
+            auth.signOut()
+            error("Tu perfil VeriPago está desactivado.")
+        }
+        reference.update("lastLoginAt", com.google.firebase.firestore.FieldValue.serverTimestamp()).await()
+        val profile = UserProfile(user.uid, snapshot.getString("email").orEmpty(), snapshot.getString("displayName").orEmpty(),
+            snapshot.getString("photoUrl").orEmpty(), role, true, snapshot.getLong("loyaltyPoints") ?: 0L)
         cache.save(profile)
         return profile
     }

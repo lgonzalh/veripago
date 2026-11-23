@@ -9,14 +9,12 @@ test('landing page loads from the VeriPago subpath', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Muestra el QR y cobra' })).toBeVisible()
 })
 
-test('login modal offers Google as the only sign-in method after profile selection', async ({ page }) => {
+test('login modal offers Google only for merchant and admin access', async ({ page }) => {
   await page.goto('./')
   await page.getByRole('button', { name: 'Empezar gratis' }).click()
 
-  await expect(page.getByRole('heading', { name: '¿Cómo quieres entrar?' })).toBeVisible()
-  const buyerChoice = page.getByRole('button', { name: /Quiero comprar/ })
-  await buyerChoice.click()
-  await expect(buyerChoice).toHaveClass(/selected/)
+  await expect(page.getByRole('heading', { name: 'Continúa con Google' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Quiero comprar/ })).toHaveCount(0)
   await expect(page.locator('.login-modal .button-full')).toContainText('Continuar con Google')
   await expect(page.locator('.login-modal input[type="password"]')).toHaveCount(0)
 })

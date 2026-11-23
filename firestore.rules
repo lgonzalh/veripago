@@ -18,20 +18,11 @@ service cloud.firestore {
 
     function isAdmin() { return hasRole('ADMINISTRADOR'); }
     function isMerchant(uid) { return hasRole('COMERCIANTE') && request.auth.uid == uid; }
-    function validRole(role) { return role in ['COMERCIANTE', 'USUARIO', 'ADMINISTRADOR']; }
-
     match /users/{uid} {
       allow get: if signedInWithGoogle() && (request.auth.uid == uid || isAdmin());
       allow list: if isAdmin();
-      allow create: if signedInWithGoogle()
-        && request.auth.uid == uid
-        && request.resource.data.uid == uid
-        && request.resource.data.role in ['COMERCIANTE', 'USUARIO']
-        && request.resource.data.isActive == true
-        && request.resource.data.keys().hasOnly([
-          'uid', 'email', 'displayName', 'photoUrl', 'role', 'isActive',
-          'quotaMaxLinks', 'loyaltyPoints', 'createdAt', 'lastLoginAt'
-        ]);
+      // Trusted profile provisioning assigns merchants and the allowlisted platform admin.
+      allow create: if false;
       allow update: if isAdmin()
         || (signedInWithGoogle() && request.auth.uid == uid
           && request.resource.data.diff(resource.data).affectedKeys()

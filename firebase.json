@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "site": "lantonium",
+    "site": "veripago-9cda6",
     "public": "dist",
     "ignore": ["firebase.json", ".firebaserc", "**/.*", "**/node_modules/**"],
     "rewrites": [

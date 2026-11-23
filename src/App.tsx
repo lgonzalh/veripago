@@ -26,7 +26,7 @@ import { parseNotification } from './lib/bankParser'
 import type { OrderRecord, PaymentLink, PaymentMethod, PaymentProvider, Product, Role, UserProfile } from './lib/types'
 
 const roleNames: Record<Role, string> = {
-  COMERCIANTE: 'Comerciante', USUARIO: 'Cliente', ADMINISTRADOR: 'Administrador',
+  COMERCIANTE: 'Comerciante', ADMINISTRADOR: 'Administrador',
 }
 
 const walletProviders: Array<{ id: PaymentProvider; label: string; logo?: string }> = [
@@ -83,10 +83,10 @@ export default function App() {
     })
   }, [])
 
-  const startLogin = async (role: 'COMERCIANTE' | 'USUARIO') => {
+  const startLogin = async () => {
     setLoginError('')
     try {
-      const profile = await signInWithGoogle(role)
+      const profile = await signInWithGoogle()
       setUser(profile)
       setLoginOpen(false)
       setNotice(`Hola, ${profile.displayName.split(' ')[0]}. Tu espacio está listo.`)
@@ -124,19 +124,19 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Landing user={user} onLogin={() => setLoginOpen(true)} />} />
         <Route path="/comercio/*" element={user?.role === 'COMERCIANTE' ? <MerchantDashboard user={user} /> : <AccessGate user={user} openLogin={() => setLoginOpen(true)} />} />
-        <Route path="/mi-cuenta/*" element={user?.role === 'USUARIO' ? <CustomerDashboard user={user} /> : <AccessGate user={user} openLogin={() => setLoginOpen(true)} />} />
+        <Route path="/mi-cuenta/*" element={<Navigate to="/" replace />} />
         <Route path="/admin/*" element={user?.role === 'ADMINISTRADOR' ? <AdminDashboard user={user} /> : <AccessGate user={user} openLogin={() => setLoginOpen(true)} />} />
         <Route path="/:slug" element={<PublicCheckout />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>}
 
-    {loginOpen && <LoginModal error={loginError} onClose={() => setLoginOpen(false)} onChoose={startLogin} />}
+    {loginOpen && <LoginModal error={loginError} onClose={() => setLoginOpen(false)} onContinue={startLogin} />}
     <footer className="site-footer"><Link to="/" className="footer-brand"><img src={brand} alt="" /> VeriPago</Link><span>Pagos directos. Pedidos claros. Cero comisiones.</span><span>© 2026 VeriPago</span></footer>
   </>
 }
 
 function homeForRole(role: Role) {
-  return role === 'COMERCIANTE' ? '/comercio' : role === 'ADMINISTRADOR' ? '/admin' : '/mi-cuenta'
+  return role === 'COMERCIANTE' ? '/comercio' : '/admin'
 }
 
 function Landing({ user, onLogin }: { user: UserProfile | null; onLogin: () => void }) {
@@ -184,13 +184,11 @@ function Landing({ user, onLogin }: { user: UserProfile | null; onLogin: () => v
   </main>
 }
 
-function LoginModal({ error, onClose, onChoose }: { error: string; onClose: () => void; onChoose: (role: 'COMERCIANTE' | 'USUARIO') => void }) {
-  const [role, setRole] = useState<'COMERCIANTE' | 'USUARIO'>('COMERCIANTE')
+function LoginModal({ error, onClose, onContinue }: { error: string; onClose: () => void; onContinue: () => void }) {
   return <div className="modal-backdrop" onClick={onClose}><div className="login-modal" onClick={(event) => event.stopPropagation()}>
-    <button className="modal-close" onClick={onClose} aria-label="Cerrar"><X size={19} /></button><img className="modal-logo" src={brand} alt="VeriPago" /><div className="eyebrow">BIENVENIDO A VERIPAGO</div><h2>¿Cómo quieres entrar?</h2><p>Usa tu cuenta de Google para continuar.</p>
-    <div className="role-options"><button className={role === 'COMERCIANTE' ? 'role-option selected' : 'role-option'} onClick={() => setRole('COMERCIANTE')}><Store size={19} /><span><b>Tengo un negocio</b><small>Quiero cobrar y seguir pedidos</small></span>{role === 'COMERCIANTE' && <Check size={17} />}</button><button className={role === 'USUARIO' ? 'role-option selected' : 'role-option'} onClick={() => setRole('USUARIO')}><Wallet size={19} /><span><b>Quiero comprar</b><small>Quiero consultar mis pedidos</small></span>{role === 'USUARIO' && <Check size={17} />}</button></div>
+    <button className="modal-close" onClick={onClose} aria-label="Cerrar"><X size={19} /></button><img className="modal-logo" src={brand} alt="VeriPago" /><div className="eyebrow">ACCESO A VERIPAGO</div><h2>Continúa con Google</h2><p>Inicia sesión o registra tu perfil de comerciante con Google. Las cuentas administradoras autorizadas entran a su panel.</p>
     {error && <div className="inline-error">{error}</div>}{!isFirebaseConfigured && <div className="inline-note">El inicio de sesión requiere configurar Firebase en <code>.env.local</code>.</div>}
-    <button className="button button-primary button-full" onClick={() => onChoose(role)} disabled={!isFirebaseConfigured}><GoogleMark /> Continuar con Google</button><small className="privacy-note"><ShieldCheck size={14} /> Nunca solicitamos las claves de tus billeteras.</small>
+    <button className="button button-primary button-full" onClick={onContinue} disabled={!isFirebaseConfigured}><GoogleMark /> Continuar con Google</button><small className="privacy-note"><ShieldCheck size={14} /> Los compradores pagan como invitados desde su enlace o QR.</small>
   </div></div>
 }
 
@@ -402,16 +400,6 @@ function QrPaymentModal({ value, onClose }: { value: { url: string; code: string
   return <div className="modal-backdrop" onClick={onClose}><div className="qr-modal" onClick={(e) => e.stopPropagation()}><button className="modal-close" onClick={onClose}><X size={19} /></button><div className="eyebrow">COBRO EN MOSTRADOR</div><h2>Escanea y paga</h2><p>Pedido <b>{value.code}</b></p><div className="qr-modal-code">{value.url ? <img src={value.url} alt={`QR de ${walletProviders.find((item) => item.id === value.paymentProvider)?.label ?? 'pago'}`} /> : <div><QrCode size={80} /><small>Configura un QR bancario en VeriPago Web</small></div>}</div><div className="wallet-modal-method"><PaymentProviderLogo provider={value.paymentProvider} className="wallet-choice-logo" /><b>{walletProviders.find((item) => item.id === value.paymentProvider)?.label}</b>{value.paymentKeyLabel && <span>{value.paymentKeyLabel}</span>}</div><div className="qr-modal-total"><span>Total exacto</span><b>{formatCOP(value.total)}</b></div><div className="waiting-banner"><span className="spinner" /> Esperando confirmación del pago</div><button className="button button-outline button-full" onClick={onClose}>Listo</button></div></div>
 }
 
-function CustomerDashboard({ user }: { user: UserProfile }) {
-  const [orders, setOrders] = useState<OrderRecord[]>([])
-  const [error, setError] = useState('')
-  useEffect(() => { getOrders(user.uid, 'USUARIO').then(setOrders).catch((e) => setError(errorText(e))) }, [user.uid])
-  const points = user.loyaltyPoints || 0
-  return <DashboardShell user={user} eyebrow="MI CUENTA" title={`Hola, ${user.displayName.split(' ')[0]}.`} subtitle="Aquí tienes el historial de tus compras y los comprobantes verificados.">
-    <div className="dashboard-stats"><Stat icon={<PackageCheck />} label="Mis pedidos" value={`${orders.length}`} tone="blue" /><Stat icon={<BadgeCheck />} label="Pagos confirmados" value={`${orders.filter((o) => o.paymentStatus.startsWith('VERIFIED')).length}`} tone="green" /><Stat icon={<Wallet />} label="Puntos de fidelidad" value={`${points} pts`} tone="purple" /></div>{error && <div className="inline-error">{error}</div>}<OrderTable orders={orders} filter="" setFilter={() => undefined} />
-  </DashboardShell>
-}
-
 function AdminDashboard({ user }: { user: UserProfile }) {
   const [tab, setTab] = useState<'overview' | 'rules' | 'users' | 'platform'>('overview')
   const [orders, setOrders] = useState<OrderRecord[]>([])
@@ -477,14 +465,14 @@ function AdminDashboard({ user }: { user: UserProfile }) {
     {error && <div className="inline-error">{error}</div>}<div className="dashboard-tabs"><button className={tab === 'overview' ? 'active' : ''} onClick={() => setTab('overview')}><Wallet size={16} /> Resumen</button><button className={tab === 'rules' ? 'active' : ''} onClick={() => setTab('rules')}><ShieldCheck size={16} /> Reglas Regex</button><button className={tab === 'users' ? 'active' : ''} onClick={() => setTab('users')}><Store size={16} /> Usuarios</button><button className={tab === 'platform' ? 'active' : ''} onClick={() => setTab('platform')}><Smartphone size={16} /> Plataforma</button></div>
     {tab === 'overview' && <><div className="dashboard-stats"><Stat icon={<Wallet />} label="Volumen verificado" value={formatCOP(volume)} tone="green" /><Stat icon={<BadgeCheck />} label="Pagos conciliados" value={`${matched.length}`} tone="blue" /><Stat icon={<Store />} label="Comercios registrados" value={`${users.filter((u) => u.role === 'COMERCIANTE').length}`} tone="purple" /></div><section className="panel"><div className="panel-heading"><span className="panel-heading-icon"><PackageCheck size={20} /></span><div><h2>Actividad reciente</h2><p>Operación global de VeriPago.</p></div></div><OrderTable orders={orders.slice(0, 20)} filter="" setFilter={() => undefined} /></section></>}
     {tab === 'rules' && <section className="panel admin-rules"><div className="panel-heading"><span className="panel-heading-icon violet"><ShieldCheck size={20} /></span><div><h2>Reglas bancarias</h2><p>Prueba las expresiones antes de sincronizarlas.</p></div></div><label className="field-label">Texto de notificación<textarea value={regexText} onChange={(e) => setRegexText(e.target.value)} rows={2} /></label><label className="field-label">Expresión para monto<input value={amountRegex} onChange={(e) => setAmountRegex(e.target.value)} /></label><label className="field-label">Expresión para remitente<input value={senderRegex} onChange={(e) => setSenderRegex(e.target.value)} /></label><div className="form-actions"><button className="button button-outline" onClick={matchRegex}>Probar reglas</button><button className="button button-primary" onClick={saveRule} disabled={saving}><Plus size={15} /> Guardar desactivada</button></div>{parsed && <div className="regex-result"><b>Resultado de prueba</b><span>Monto: {parsed.amount}</span><span>Remitente: {parsed.sender}</span></div>}<div className="rule-list">{rules.map((rule) => <div className="rule-row" key={String(rule.id)}><span className="rule-dot" /><div><b>{String(rule.walletName)}</b><small>{String(rule.androidPackage || 'Paquete por configurar')}</small></div><span className="status-chip status-pending">{rule.isActive ? 'Activa' : 'Desactivada'}</span></div>)}</div></section>}
-    {tab === 'users' && <section className="panel"><div className="panel-heading"><span className="panel-heading-icon"><Store size={20} /></span><div><h2>Perfiles registrados</h2><p>Asigna el rol correcto para cada cuenta.</p></div></div><div className="user-list">{users.map((profile) => <div className="admin-user-row" key={profile.uid}><img src={profile.photoUrl || brand} alt="" /><span><b>{profile.displayName}</b><small>{profile.email}</small></span><select value={profile.role} onChange={(e) => changeRole(profile.uid, e.target.value as Role)} disabled={profile.uid === user.uid}><option value="COMERCIANTE">Comerciante</option><option value="USUARIO">Usuario</option><option value="ADMINISTRADOR">Administrador</option></select></div>)}</div></section>}
+    {tab === 'users' && <section className="panel"><div className="panel-heading"><span className="panel-heading-icon"><Store size={20} /></span><div><h2>Perfiles registrados</h2><p>Asigna el rol correcto para cada cuenta.</p></div></div><div className="user-list">{users.map((profile) => <div className="admin-user-row" key={profile.uid}><img src={profile.photoUrl || brand} alt="" /><span><b>{profile.displayName}</b><small>{profile.email}</small></span><select value={profile.role} onChange={(e) => changeRole(profile.uid, e.target.value as Role)} disabled={profile.uid === user.uid}><option value="COMERCIANTE">Comerciante</option><option value="ADMINISTRADOR">Administrador</option></select></div>)}</div></section>}
     {tab === 'platform' && <section className="panel platform-panel"><div className="panel-heading"><span className="panel-heading-icon"><Smartphone size={20} /></span><div><h2>Publicar app Android</h2><p>Actualiza el APK que se ofrece para descarga.</p></div></div><div className="form-row"><label className="field-label">Versión<input value={apkVersion} onChange={(e) => setApkVersion(e.target.value)} /></label><label className="field-label">Archivo APK<input type="file" accept=".apk,application/vnd.android.package-archive" onChange={(e) => setApkFile(e.target.files?.[0] ?? null)} /></label></div><button className="button button-primary" onClick={publishApk} disabled={saving || !apkFile}><ArrowDownToLine size={16} /> {saving ? 'Publicando…' : 'Publicar versión'}</button><p className="helper-line"><ShieldCheck size={14} /> El APK estará disponible públicamente desde Storage.</p></section>}
   </DashboardShell>
 }
 
 function DashboardShell({ user, eyebrow, title, subtitle, children }: { user: UserProfile; eyebrow: string; title: string; subtitle: string; children: React.ReactNode }) {
   const navigate = useNavigate()
-  return <main className="dashboard-wrap"><div className="dashboard-back"><button onClick={() => navigate('/')}><ArrowLeft size={16} /> Volver a inicio</button><span className="role-chip"><span className="live-dot" />{roleNames[user.role]}</span></div><section className="dashboard-heading"><div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p>{subtitle}</p></div><div className="dashboard-user"><img src={user.photoUrl || brand} alt="" /><span><b>{user.displayName}</b><small>Cuenta verificada con Google</small></span><ShieldCheck size={18} /></div></section>{children}</main>
+  return <main className="dashboard-wrap"><div className="dashboard-back"><button onClick={() => navigate('/')}><ArrowLeft size={16} /> Volver a inicio</button><span className="role-chip"><span className="live-dot" />{roleNames[user.role]}</span></div><section className="dashboard-heading"><div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p>{subtitle}</p></div><div className="dashboard-user"><img src={user.photoUrl || brand} alt="" /><span><b>{user.displayName}</b><small>{user.email} · Google</small></span><ShieldCheck size={18} /></div></section>{children}</main>
 }
 
 function Stat({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: 'green' | 'purple' | 'blue' }) {

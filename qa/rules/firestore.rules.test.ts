@@ -65,9 +65,9 @@ describe('Firestore security rules', () => {
     await assertFails(getDocs(collection(guest, 'public_payment_links')))
   })
 
-  it('allows a Google user to create only their own buyer or merchant profile', async () => {
+  it('prevents clients from creating or assigning merchant, buyer, or admin profiles', async () => {
     const db = googleUser('new-merchant')
-    await assertSucceeds(setDoc(doc(db, 'users', 'new-merchant'), user('new-merchant', 'COMERCIANTE')))
+    await assertFails(setDoc(doc(db, 'users', 'new-merchant'), user('new-merchant', 'COMERCIANTE')))
 
     const anotherDb = googleUser('self-admin')
     await assertFails(setDoc(doc(anotherDb, 'users', 'self-admin'), user('self-admin', 'ADMINISTRADOR')))

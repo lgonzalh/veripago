@@ -50,7 +50,6 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -133,25 +132,30 @@ private fun paymentProviderLogo(provider: String): Int? = when (provider) {
 fun VeriPagoApp(activity: Activity) {
     var profile by remember { mutableStateOf<UserProfile?>(null) }
     var loading by remember { mutableStateOf(true) }
-    var loginOpen by rememberSaveable { mutableStateOf(false) }
-    var initialRole by rememberSaveable { mutableStateOf("COMERCIANTE") }
     var error by remember { mutableStateOf("") }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
-        profile = runCatching { AppGraph.profileCache.read() }.getOrNull()
+        val cached = runCatching { AppGraph.profileCache.read() }.getOrNull()
+        profile = cached?.takeIf { it.role == "COMERCIANTE" || it.role == "ADMINISTRADOR" }
+        if (cached != null && profile == null) AppGraph.profileCache.clear()
         val currentUser = FirebaseClients.auth?.currentUser
         if (currentUser != null && FirebaseClients.firestore != null) {
             runCatching {
                 val userDoc = FirebaseClients.firestore!!.collection("users").document(currentUser.uid).get().await()
-                if (userDoc.exists()) {
+                val role = userDoc.getString("role").orEmpty()
+                if (userDoc.exists() && (role == "COMERCIANTE" || role == "ADMINISTRADOR") && userDoc.getBoolean("isActive") == true) {
                     val saved = UserProfile(currentUser.uid, userDoc.getString("email").orEmpty(), userDoc.getString("displayName").orEmpty(),
-                        userDoc.getString("photoUrl").orEmpty(), userDoc.getString("role") ?: "USUARIO",
-                        userDoc.getBoolean("isActive") ?: true, userDoc.getLong("loyaltyPoints") ?: 0L)
+                        userDoc.getString("photoUrl").orEmpty(), role, true, userDoc.getLong("loyaltyPoints") ?: 0L)
                     profile = saved
                     AppGraph.profileCache.save(saved)
+                } else {
+                    FirebaseClients.auth?.signOut()
+                    AppGraph.profileCache.clear()
+                    profile = null
+                    error = "Inicia sesión en la app web para registrar tu perfil de comerciante."
                 }
             }
         }
@@ -159,7 +163,8 @@ fun VeriPagoApp(activity: Activity) {
     }
 
     val credentialManager = remember { CredentialManager.create(context) }
-    val signInWithGoogle: (String) -> Unit = { role ->
+    val signInWithGoogle: () -> Unit = {
+        error = ""
         scope.launch {
             try {
                 if (!FirebaseClients.isConfigured) error("Firebase aún no está configurado en este build.")
@@ -177,8 +182,7 @@ fun VeriPagoApp(activity: Activity) {
                 }
                 val token = GoogleIdTokenCredential.createFrom(credential.data).idToken
                 val authRepo = GoogleAuthRepository(context, AppGraph.profileCache)
-                profile = authRepo.signIn(token, role)
-                loginOpen = false
+                profile = authRepo.signIn(token)
                 error = ""
                 snackbar.showSnackbar("Hola, ${profile?.displayName?.substringBefore(' ')}. Tu espacio está listo.")
                 if (profile?.role == "COMERCIANTE") startPaymentListener(context)
@@ -219,7 +223,7 @@ fun VeriPagoApp(activity: Activity) {
                     val entries = when (profile?.role) {
                         "COMERCIANTE" -> listOf("inicio" to "Cobrar", "pedidos" to "Pedidos", "estado" to "Celular")
                         "ADMINISTRADOR" -> listOf("inicio" to "Resumen", "pedidos" to "Actividad")
-                        else -> listOf("inicio" to "Mi cuenta", "pedidos" to "Pedidos")
+                        else -> emptyList()
                     }
                     entries.forEach { (route, label) ->
                         val selected = currentRoute == route
@@ -240,7 +244,9 @@ fun VeriPagoApp(activity: Activity) {
             LandingScreen(
                 modifier = Modifier.padding(padding),
                 configured = FirebaseClients.isConfigured,
-                onLogin = { initialRole = it; error = ""; loginOpen = true },
+                error = error,
+                onLogin = signInWithGoogle,
+            onRegister = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://veripago-9cda6.web.app/VeriPago/"))) },
             )
         } else {
             NavHost(navController = nav, startDestination = "inicio", modifier = Modifier.padding(padding)) {
@@ -248,7 +254,7 @@ fun VeriPagoApp(activity: Activity) {
                     when (profile?.role) {
                         "COMERCIANTE" -> MerchantScreen(profile!!, onError = { error = it; scope.launch { snackbar.showSnackbar(it) } })
                         "ADMINISTRADOR" -> AdminScreen()
-                        else -> CustomerScreen(profile!!)
+                        else -> MerchantScreen(profile!!, onError = { error = it; scope.launch { snackbar.showSnackbar(it) } })
                     }
                 }
                 composable("pedidos") { OrdersScreen(profile!!) }
@@ -257,20 +263,10 @@ fun VeriPagoApp(activity: Activity) {
         }
     }
 
-    if (loginOpen) {
-        LoginDialog(
-            role = initialRole,
-            error = error,
-            configured = FirebaseClients.isConfigured && BuildConfig.WEB_CLIENT_ID.isNotBlank(),
-            onRoleChange = { initialRole = it },
-            onDismiss = { loginOpen = false },
-            onContinue = { signInWithGoogle(initialRole) },
-        )
-    }
 }
 
 @Composable
-private fun LandingScreen(modifier: Modifier, configured: Boolean, onLogin: (String) -> Unit) {
+private fun LandingScreen(modifier: Modifier, configured: Boolean, error: String, onLogin: () -> Unit, onRegister: () -> Unit) {
     Column(modifier.fillMaxSize().background(Color(0xFFF5F7FA))) {
         Column(Modifier.weight(1f).padding(horizontal = 24.dp).padding(top = 34.dp), verticalArrangement = Arrangement.Center) {
             Text("COBRA DIRECTO. CONFIRMA AL INSTANTE.", color = Green, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
@@ -284,12 +280,14 @@ private fun LandingScreen(modifier: Modifier, configured: Boolean, onLogin: (Str
             FeatureLine(Icons.Default.CheckCircle, "Entrega con el pago verificado")
         }
         Column(Modifier.fillMaxWidth().background(Color.White).padding(22.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-            Button(onClick = { onLogin("COMERCIANTE") }, modifier = Modifier.fillMaxWidth().height(51.dp), shape = RoundedCornerShape(12.dp)) {
+            Button(onClick = onLogin, modifier = Modifier.fillMaxWidth().height(51.dp), shape = RoundedCornerShape(12.dp)) {
                 Image(painterResource(R.drawable.google_logo), contentDescription = null, modifier = Modifier.size(19.dp))
                 Spacer(Modifier.width(9.dp))
                 Text("Continuar con Google", fontWeight = FontWeight.SemiBold)
             }
-            if (!configured) Text("Google aún no está conectado a Firebase en este APK. Elige tu perfil y la app te mostrará lo que falta configurar.", color = Muted, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            if (error.isNotBlank()) Text(error, color = Color(0xFFB44743), fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            if (!configured) Text("Configura Google Sign-In en Firebase para habilitar el acceso.", color = Muted, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            TextButton(onClick = onRegister, modifier = Modifier.fillMaxWidth()) { Text("Registrar perfil de comerciante en la web") }
             Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.CloudOff, null, tint = Green, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(5.dp)); Text("Tus pedidos se conservan sin conexión", color = Muted, fontSize = 10.sp) }
         }
     }
@@ -302,41 +300,6 @@ private fun FeatureLine(icon: androidx.compose.ui.graphics.vector.ImageVector, l
             Icon(icon, null, tint = Color(0xFF3578D8), modifier = Modifier.size(18.dp))
         }
         Spacer(Modifier.width(10.dp)); Text(label, color = Navy, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-    }
-}
-
-@Composable
-private fun LoginDialog(role: String, error: String, configured: Boolean, onRoleChange: (String) -> Unit, onDismiss: () -> Unit, onContinue: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Row(verticalAlignment = Alignment.CenterVertically) {
-            Image(painterResource(R.drawable.google_logo), contentDescription = null, modifier = Modifier.size(24.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("Continuar con Google", color = Navy, fontWeight = FontWeight.Bold)
-        } },
-        text = {
-            Column {
-                Text("Elige tu perfil para configurar tu cuenta.", color = Muted, fontSize = 12.sp)
-                RoleChoice("COMERCIANTE", "Tengo un negocio", role, onRoleChange)
-                RoleChoice("USUARIO", "Quiero comprar", role, onRoleChange)
-                if (!configured) Text("Falta habilitar Google en Firebase y agregar el Web client ID en local.properties.", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 7.dp))
-                if (error.isNotBlank()) Text(error, color = Color(0xFFB44743), fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
-            }
-        },
-        confirmButton = { Button(onClick = onContinue, enabled = configured) {
-            Image(painterResource(R.drawable.google_logo), contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(7.dp))
-            Text("Continuar con Google")
-        } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
-    )
-}
-
-@Composable
-private fun RoleChoice(value: String, label: String, selected: String, onSelect: (String) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        RadioButton(selected == value, onClick = { onSelect(value) })
-        Text(label, color = Navy, fontSize = 13.sp)
     }
 }
 
@@ -553,25 +516,13 @@ private suspend fun createShareLink(profile: UserProfile, name: String, price: L
             "beneficiaryName" to method.beneficiaryName,
         ) },
     )).await().data as Map<*, *>
-    "https://lantonium.com/VeriPago/${result["slug"]}"
-}
-
-@Composable
-private fun CustomerScreen(profile: UserProfile) {
-    val orders by AppGraph.payments.observeCustomerOrders(profile.uid).collectAsState(initial = emptyList())
-    LazyColumn(Modifier.fillMaxSize().background(Color(0xFFF5F7FA)).padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Column(Modifier.padding(top = 23.dp)) { Text("MI CUENTA", color = Color(0xFF3473CC), fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(5.dp)); Text("Hola, ${profile.displayName.substringBefore(' ')}.", color = Navy, fontSize = 25.sp, fontWeight = FontWeight.Bold); Text("Tus compras y comprobantes", color = Muted, fontSize = 11.sp) } }
-        item { MiniMetric("Puntos de fidelidad", "${profile.loyaltyPoints} pts", Green, Modifier.fillMaxWidth()) }
-        item { Text("PEDIDOS RECIENTES", color = Muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp)) }
-        if (orders.isEmpty()) item { EmptyCard("Cuando completes una compra, tu historial aparecerá aquí.") }
-        items(orders, key = { it.orderId }) { CompactOrder(it) }
-    }
+        "https://veripago-9cda6.web.app/VeriPago/${result["slug"]}"
 }
 
 @Composable
 private fun OrdersScreen(profile: UserProfile) {
     val context = LocalContext.current
-    val ordersFlow = if (profile.role == "COMERCIANTE") AppGraph.payments.observeOrders(profile.uid) else AppGraph.payments.observeCustomerOrders(profile.uid)
+    val ordersFlow = if (profile.role == "COMERCIANTE") AppGraph.payments.observeOrders(profile.uid) else kotlinx.coroutines.flow.flowOf(emptyList<OrderEntity>())
     val orders by ordersFlow.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize().background(Color(0xFFF5F7FA)).padding(18.dp)) {

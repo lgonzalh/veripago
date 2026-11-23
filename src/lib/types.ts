@@ -1,4 +1,4 @@
-export type Role = 'COMERCIANTE' | 'USUARIO' | 'ADMINISTRADOR'
+export type Role = 'COMERCIANTE' | 'ADMINISTRADOR'
 export type PaymentStatus = 'PENDING' | 'VERIFIED_AUTO' | 'VERIFIED_MANUAL' | 'CANCELLED'
 export type DeliveryStatus = 'PENDING_DELIVERY' | 'DELIVERED'
 export type CheckoutMode = 'IN_SITU_QR' | 'WHATSAPP_LINK'

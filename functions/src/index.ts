@@ -25,6 +25,68 @@ function requireGoogle(request: CallableRequest<unknown>) {
   return auth
 }
 
+export const provisionGoogleProfile = onCall({ region, enforceAppCheck: false }, async (request) => {
+  const auth = requireGoogle(request)
+  const email = String(auth.token.email ?? '').trim().toLowerCase()
+  if (!email || auth.token.email_verified !== true) fail('unauthenticated', 'Verifica tu cuenta de Google para registrarte.')
+  const isBootstrapAdmin = email === 'lantonium@gmail.com'
+  const profileRef = db.doc(`users/${auth.uid}`)
+  const displayName = String(auth.token.name ?? 'Comerciante VeriPago').trim().slice(0, 100)
+  const photoUrl = String(auth.token.picture ?? '').slice(0, 2048)
+
+  const profile = await db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(profileRef)
+    if (existing.exists) {
+      const data = existing.data()!
+      if (data.isActive === false) fail('permission-denied', 'Tu cuenta VeriPago está desactivada.')
+      if (!isBootstrapAdmin && data.role !== 'COMERCIANTE' && data.role !== 'ADMINISTRADOR') {
+        fail('permission-denied', 'Los compradores no inician sesión. Usa el enlace o el QR del comercio.')
+      }
+      const role = isBootstrapAdmin ? 'ADMINISTRADOR' : data.role
+      transaction.update(profileRef, {
+        ...(role !== data.role ? { role } : {}),
+        lastLoginAt: FieldValue.serverTimestamp(),
+      })
+      return {
+        uid: auth.uid,
+        email: data.email ?? email,
+        displayName: data.displayName ?? displayName,
+        photoUrl: data.photoUrl ?? photoUrl,
+        role,
+        isActive: true,
+        quotaMaxLinks: data.quotaMaxLinks ?? 10,
+        loyaltyPoints: data.loyaltyPoints ?? 0,
+      }
+    }
+
+    const role = isBootstrapAdmin ? 'ADMINISTRADOR' : 'COMERCIANTE'
+    const newProfile = {
+      uid: auth.uid,
+      email,
+      displayName,
+      photoUrl,
+      role,
+      isActive: true,
+      quotaMaxLinks: 10,
+      loyaltyPoints: 0,
+      createdAt: FieldValue.serverTimestamp(),
+      lastLoginAt: FieldValue.serverTimestamp(),
+    }
+    transaction.create(profileRef, newProfile)
+    return {
+      uid: newProfile.uid,
+      email: newProfile.email,
+      displayName: newProfile.displayName,
+      photoUrl: newProfile.photoUrl,
+      role: newProfile.role,
+      isActive: newProfile.isActive,
+      quotaMaxLinks: newProfile.quotaMaxLinks,
+      loyaltyPoints: newProfile.loyaltyPoints,
+    }
+  })
+  return { profile }
+})
+
 async function requireRole(uid: string, role: string) {
   const user = await db.doc(`users/${uid}`).get()
   if (!user.exists || user.get('role') !== role || user.get('isActive') !== true) {
@@ -216,16 +278,10 @@ export const createCheckoutOrder = onCall({ region, enforceAppCheck: false }, as
     ? data.checkoutChannel as typeof allowedChannels[number]
     : link.defaultMode === 'IN_SITU_QR' ? 'WEB_IN_SITU_QR' : 'WHATSAPP_LINK'
   if (channel === 'WHATSAPP_LINK' && link.defaultMode !== 'WHATSAPP_LINK') fail('permission-denied', 'Este enlace no admite pedidos remotos.')
-  let customerUid: string | null = null
+  const customerUid: string | null = null
   if (request.auth) {
-    if (request.auth.token.firebase?.sign_in_provider !== 'google.com') fail('unauthenticated', 'Usa Google para guardar tus pedidos en tu cuenta.')
+    if (request.auth.token.firebase?.sign_in_provider !== 'google.com') fail('unauthenticated', 'Usa Google para continuar.')
     const profile = await db.doc(`users/${request.auth.uid}`).get()
-    if (profile.exists && profile.get('isActive') === true && profile.get('role') === 'USUARIO') customerUid = request.auth.uid
-    if (profile.exists && profile.get('role') === 'COMERCIANTE' && profile.get('isActive') === true
-      && link.merchantId !== request.auth.uid) {
-      // A merchant may use their own QR for an in-person checkout.
-      fail('permission-denied', 'No puedes crear pedidos en el enlace de otro comercio mientras actúas como comerciante.')
-    }
     if (channel !== 'WHATSAPP_LINK' && (!profile.exists || profile.get('role') !== 'COMERCIANTE' || profile.get('isActive') !== true || link.merchantId !== request.auth.uid)) {
       fail('permission-denied', 'Solo el comercio dueño puede crear cobros en mostrador.')
     }

@@ -1,7 +1,7 @@
 import { signInWithPopup } from 'firebase/auth'
 import {
   collection, doc, getDoc, getDocs, onSnapshot, orderBy, query, serverTimestamp,
-  setDoc, updateDoc, where, type Unsubscribe,
+  updateDoc, where, type Unsubscribe,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
@@ -13,33 +13,28 @@ function requireServices() {
   return { auth, db, functions, storage }
 }
 
-export async function signInWithGoogle(initialRole: 'COMERCIANTE' | 'USUARIO') {
-  const { auth, db } = requireServices()
-  const credential = await signInWithPopup(auth, googleProvider)
-  const profileRef = doc(db, 'users', credential.user.uid)
-  const existing = await getDoc(profileRef)
-  if (!existing.exists()) {
-    const profile: UserProfile = {
-      uid: credential.user.uid,
-      email: credential.user.email ?? '',
-      displayName: credential.user.displayName ?? 'Usuario VeriPago',
-      photoUrl: credential.user.photoURL ?? '',
-      role: initialRole,
-      isActive: true,
-      quotaMaxLinks: 10,
-      loyaltyPoints: 0,
+export async function signInWithGoogle() {
+  const { auth, functions } = requireServices()
+  await signInWithPopup(auth, googleProvider)
+  const provision = httpsCallable<Record<string, never>, { profile: UserProfile }>(functions, 'provisionGoogleProfile')
+  try {
+    const profile = (await provision({})).data.profile
+    if (profile.role !== 'COMERCIANTE' && profile.role !== 'ADMINISTRADOR') {
+      throw new Error('Esta cuenta no tiene un perfil habilitado en VeriPago.')
     }
-    await setDoc(profileRef, { ...profile, createdAt: serverTimestamp(), lastLoginAt: serverTimestamp() })
     return profile
+  } catch (error) {
+    await auth.signOut()
+    throw error
   }
-  await updateDoc(profileRef, { lastLoginAt: serverTimestamp() })
-  return existing.data() as UserProfile
 }
 
 export async function getProfile(uid: string) {
   const { db } = requireServices()
   const snap = await getDoc(doc(db, 'users', uid))
-  return snap.exists() ? snap.data() as UserProfile : null
+  if (!snap.exists()) return null
+  const profile = snap.data() as UserProfile
+  return profile.role === 'COMERCIANTE' || profile.role === 'ADMINISTRADOR' ? profile : null
 }
 
 export async function getPaymentLinkBySlug(slug: string) {
