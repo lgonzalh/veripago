@@ -7,6 +7,12 @@ test('landing page loads from the VeriPago subpath', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /El pago llega\./ })).toBeVisible()
   await expect(page.getByText('DaviPlata', { exact: true }).first()).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Muestra el QR y cobra' })).toBeVisible()
+  await expect(page.locator('.brand-lockup')).toHaveCSS('width', '58px')
+  await expect(page.locator('.wallet-pills img')).toHaveCount(3)
+  const walletMarksLoaded = await page.locator('.wallet-pills img').evaluateAll((images) =>
+    images.every((image) => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0),
+  )
+  expect(walletMarksLoaded).toBe(true)
 })
 
 test('Google login is available without an intermediate modal', async ({ page }) => {

@@ -160,7 +160,11 @@ function Landing({ user, onLogin }: { user: UserProfile | null; onLogin: () => v
           {apkRelease.url ? <a className="button button-outline" href={apkRelease.url} download><ArrowDownToLine size={17} /> Descargar APK {apkRelease.version && <small>v{apkRelease.version}</small>}</a> : <button className="button button-outline" onClick={() => setApkMessage('La versión para Android estará disponible pronto.')}><Smartphone size={17} /> App Android alfa</button>}
         </div>
         {apkMessage && <div className="subtle-note">{apkMessage}</div>}
-        <div className="trust-row"><div className="trust-avatars"><span>V</span><span>N</span><span>D</span></div><span>Funciona con tus billeteras de siempre</span><div className="wallet-pills"><b>Nequi</b><b>DaviPlata</b><b>Bre-B</b></div></div>
+        <div className="trust-row"><span>Funciona con tus billeteras de siempre</span><div className="wallet-pills" aria-label="Nequi, DaviPlata y Bre-B">
+          <span><img src={nequiLogo} alt="" />Nequi</span>
+          <span><img src={daviplataLogo} alt="" />DaviPlata</span>
+          <span><img src={breBLogo} alt="" />Bre-B</span>
+        </div></div>
       </div>
       <div className="hero-art">
         <div className="glow glow-one" /><div className="glow glow-two" />
