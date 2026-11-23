@@ -87,6 +87,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.work.OneTimeWorkRequestBuilder
 import coil.compose.AsyncImage
+import coil.decode.GifDecoder
+import coil.request.ImageRequest
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.Timestamp
@@ -102,6 +104,7 @@ import com.lantonium.veripago.data.PendingSyncScheduler
 import com.lantonium.veripago.data.UserProfile
 import com.lantonium.veripago.service.PaymentMonitorService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -138,6 +141,7 @@ fun VeriPagoApp(activity: Activity) {
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
+        val splashStartedAt = System.currentTimeMillis()
         val cached = runCatching { AppGraph.profileCache.read() }.getOrNull()
         profile = cached?.takeIf { it.role == "COMERCIANTE" || it.role == "ADMINISTRADOR" }
         if (cached != null && profile == null) AppGraph.profileCache.clear()
@@ -159,6 +163,8 @@ fun VeriPagoApp(activity: Activity) {
                 }
             }
         }
+        val splashTimeRemaining = 1_500L - (System.currentTimeMillis() - splashStartedAt)
+        if (splashTimeRemaining > 0) delay(splashTimeRemaining)
         loading = false
     }
 
@@ -239,7 +245,21 @@ fun VeriPagoApp(activity: Activity) {
         },
     ) { padding ->
         if (loading) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            Box(
+                Modifier.fillMaxSize().padding(padding).background(Color(0xFF071A32)),
+                contentAlignment = Alignment.Center,
+            ) {
+                AsyncImage(
+                    model = remember {
+                        ImageRequest.Builder(context)
+                            .data(R.drawable.veripago_splash)
+                            .decoderFactory(GifDecoder.Factory())
+                            .build()
+                    },
+                    contentDescription = "Animación de inicio de VeriPago",
+                    modifier = Modifier.fillMaxWidth().height(500.dp).padding(horizontal = 36.dp),
+                )
+            }
         } else if (profile == null) {
             LandingScreen(
                 modifier = Modifier.padding(padding),
