@@ -7,7 +7,7 @@ VeriPago organiza cobros QR, pedidos y confirmaciones para Nequi, Daviplata y Br
 - **Datos:** reglas iniciales de Firestore y Storage, índices, esquema Firestore/Room y contrato de conciliación.
 - **Web:** landing, autenticación por Google, vista pública de pago por slug, checkout con seguimiento, paneles iniciales para comercios, compradores y administradores.
 - **Servidor:** Cloud Functions para reservar slugs, crear pedidos con precios calculados en el servidor, limitar pedidos públicos por IP y reflejar estados en sesiones de checkout.
-- **Android:** pendiente.
+- **Android:** app nativa inicial con Compose, perfil Firebase, pedidos, conciliación local de notificaciones, Room y sincronización diferida. APK de depuración generado; falta validación funcional en dispositivo y configuración Firebase de desarrollo.
 - **Despliegue y QA integral:** pendiente. Los QR personales de `assets/` se mantienen locales; no subirlos al repositorio.
 
 ## Desarrollo web
@@ -20,6 +20,16 @@ pnpm build
 pnpm test
 pnpm dev
 ```
+
+## Android
+
+Requiere JDK 17 y Android SDK 35. Define `sdk.dir` en `local.properties` y configura `firebaseApiKey`, `firebaseAppId`, `firebaseProjectId`, `firebaseStorageBucket` y `webClientId` en ese archivo para habilitar Firebase y Google Sign-In. No se incluyen credenciales en Git.
+
+```powershell
+.\gradlew.bat assembleDebug
+```
+
+El APK de depuración se genera en `app/build/outputs/apk/debug/app-debug.apk`.
 
 La aplicación local abre en `http://localhost:5173/VeriPago/`. El build se genera en `dist/VeriPago/` con los recursos apuntando a `/VeriPago/`.
 
