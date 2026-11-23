@@ -2,6 +2,14 @@ export type Role = 'COMERCIANTE' | 'USUARIO' | 'ADMINISTRADOR'
 export type PaymentStatus = 'PENDING' | 'VERIFIED_AUTO' | 'VERIFIED_MANUAL' | 'CANCELLED'
 export type DeliveryStatus = 'PENDING_DELIVERY' | 'DELIVERED'
 export type CheckoutMode = 'IN_SITU_QR' | 'WHATSAPP_LINK'
+export type PaymentProvider = 'NEQUI' | 'DAVIPLATA' | 'BRE_B' | 'OTHER'
+
+export interface PaymentMethod {
+  provider: PaymentProvider
+  qrImageUrl: string
+  paymentKeyLabel: string
+  beneficiaryName: string
+}
 
 export interface UserProfile {
   uid: string
@@ -30,6 +38,8 @@ export interface PaymentLink {
   qrImageUrl: string
   paymentKeyLabel: string
   beneficiaryName: string
+  paymentProvider?: PaymentProvider
+  paymentMethods?: PaymentMethod[]
   isActive: boolean
 }
 

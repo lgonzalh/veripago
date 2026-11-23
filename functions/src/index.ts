@@ -8,6 +8,10 @@ initializeApp()
 const db = getFirestore()
 const region = 'us-central1'
 const allowedChannels = ['MOBILE_IN_SITU_QR', 'WEB_IN_SITU_QR', 'WHATSAPP_LINK'] as const
+const allowedPaymentProviders = ['NEQUI', 'DAVIPLATA', 'BRE_B', 'OTHER'] as const
+
+type PaymentProvider = typeof allowedPaymentProviders[number]
+type PaymentMethod = { provider: PaymentProvider; qrImageUrl: string; paymentKeyLabel: string; beneficiaryName: string }
 
 function fail(code: ConstructorParameters<typeof HttpsError>[0], message: string): never {
   throw new HttpsError(code, message)
@@ -54,6 +58,62 @@ function validateProducts(value: unknown) {
   })
 }
 
+function normalizePaymentMethods(value: unknown, legacy: Record<string, unknown>): PaymentMethod[] {
+  const candidates = Array.isArray(value) ? value : [legacy]
+  if (candidates.length > 3) fail('invalid-argument', 'Configura máximo tres medios de pago.')
+  const seen = new Set<string>()
+  const methods = candidates.map((candidate: unknown) => {
+    if (!candidate || typeof candidate !== 'object') fail('invalid-argument', 'Hay un medio de pago inválido.')
+    const method = candidate as Record<string, unknown>
+    const providerValue = method.provider ?? legacy.paymentProvider
+    if (providerValue !== undefined && !allowedPaymentProviders.includes(providerValue as PaymentProvider)) {
+      fail('invalid-argument', 'Selecciona un medio de pago válido.')
+    }
+    const provider = allowedPaymentProviders.includes(providerValue as PaymentProvider)
+      ? providerValue as PaymentProvider
+      : 'OTHER'
+    if (seen.has(provider)) fail('invalid-argument', 'No repitas el mismo medio de pago.')
+    seen.add(provider)
+    const qrImageUrl = typeof (method.qrImageUrl ?? legacy.qrImageUrl) === 'string'
+      ? String(method.qrImageUrl ?? legacy.qrImageUrl).trim().slice(0, 2048)
+      : ''
+    if (!qrImageUrl) fail('invalid-argument', `Falta el QR de ${provider}.`)
+    return {
+      provider,
+      qrImageUrl,
+      paymentKeyLabel: typeof (method.paymentKeyLabel ?? legacy.paymentKeyLabel) === 'string'
+        ? String(method.paymentKeyLabel ?? legacy.paymentKeyLabel).trim().slice(0, 100)
+        : '',
+      beneficiaryName: typeof (method.beneficiaryName ?? legacy.beneficiaryName) === 'string'
+        ? String(method.beneficiaryName ?? legacy.beneficiaryName).trim().slice(0, 100)
+        : '',
+    }
+  })
+  if (methods.length < 1) fail('invalid-argument', 'Agrega al menos un medio de pago.')
+  return methods
+}
+
+function paymentMethodFields(methods: PaymentMethod[]) {
+  const primary = methods[0]
+  return {
+    paymentMethods: methods,
+    paymentProvider: primary.provider,
+    qrImageUrl: primary.qrImageUrl,
+    paymentKeyLabel: primary.paymentKeyLabel,
+    beneficiaryName: primary.beneficiaryName,
+  }
+}
+
+function selectPaymentMethod(link: Record<string, unknown>, requestedProvider: unknown): PaymentMethod {
+  const methods = normalizePaymentMethods(link.paymentMethods, link)
+  if (typeof requestedProvider === 'string' && requestedProvider) {
+    const selected = methods.find((method) => method.provider === requestedProvider)
+    if (!selected) fail('invalid-argument', 'El comercio no ofrece ese medio de pago.')
+    return selected
+  }
+  return methods[0]
+}
+
 export const createPaymentLink = onCall({ region, enforceAppCheck: false }, async (request) => {
   const auth = requireGoogle(request)
   await requireRole(auth.uid, 'COMERCIANTE')
@@ -66,8 +126,7 @@ export const createPaymentLink = onCall({ region, enforceAppCheck: false }, asyn
     fail('invalid-argument', 'Selecciona una modalidad de cobro válida.')
   }
   const products = validateProducts((data.schemaJson as Record<string, unknown> | undefined)?.products)
-  const qrImageUrl = typeof data.qrImageUrl === 'string' ? data.qrImageUrl.slice(0, 2048) : ''
-  if (!qrImageUrl) fail('invalid-argument', 'Sube el QR de tu billetera antes de publicar el enlace.')
+  const paymentMethods = normalizePaymentMethods(data.paymentMethods, data)
   const linkRef = db.collection('payment_links').doc()
   const slugRef = db.doc(`slug_reservations/${slug}`)
   const publicLinkRef = db.doc(`public_payment_links/${slug}`)
@@ -85,9 +144,7 @@ export const createPaymentLink = onCall({ region, enforceAppCheck: false }, asyn
       title,
       defaultMode: data.defaultMode,
       schemaJson: { products, captureCustomerInfo: Boolean((data.schemaJson as Record<string, unknown> | undefined)?.captureCustomerInfo) },
-      qrImageUrl,
-      paymentKeyLabel: typeof data.paymentKeyLabel === 'string' ? data.paymentKeyLabel.slice(0, 100) : '',
-      beneficiaryName: typeof data.beneficiaryName === 'string' ? data.beneficiaryName.slice(0, 100) : '',
+      ...paymentMethodFields(paymentMethods),
       reconciliationWindowMinutes: 20,
       isActive: true,
       createdAt: FieldValue.serverTimestamp(),
@@ -106,9 +163,13 @@ export const updatePaymentLink = onCall({ region, enforceAppCheck: false }, asyn
   const id = typeof data.id === 'string' ? data.id : ''
   const linkRef = db.doc(`payment_links/${id}`)
   const products = validateProducts((data.schemaJson as Record<string, unknown> | undefined)?.products)
-  const qrImageUrl = typeof data.qrImageUrl === 'string' ? data.qrImageUrl.slice(0, 2048) : ''
-  if (!qrImageUrl) fail('invalid-argument', 'El enlace debe tener un QR de pago.')
-  const publicRef = db.doc(`public_payment_links/${cleanSlug((await linkRef.get()).get('slug'))}`)
+  const current = await linkRef.get()
+  if (!current.exists || current.get('merchantId') !== auth.uid) fail('not-found', 'No encontramos ese enlace en tu cuenta.')
+  const publicRef = db.doc(`public_payment_links/${cleanSlug(current.get('slug'))}`)
+  const paymentMethods = normalizePaymentMethods(data.paymentMethods, {
+    ...current.data(),
+    ...data,
+  })
   await db.runTransaction(async (transaction) => {
     const [link, publicLink] = await Promise.all([transaction.get(linkRef), transaction.get(publicRef)])
     if (!link.exists || link.get('merchantId') !== auth.uid || !publicLink.exists) {
@@ -116,9 +177,7 @@ export const updatePaymentLink = onCall({ region, enforceAppCheck: false }, asyn
     }
     const patch = {
       schemaJson: { products, captureCustomerInfo: Boolean((data.schemaJson as Record<string, unknown> | undefined)?.captureCustomerInfo) },
-      qrImageUrl,
-      paymentKeyLabel: typeof data.paymentKeyLabel === 'string' ? data.paymentKeyLabel.slice(0, 100) : '',
-      beneficiaryName: typeof data.beneficiaryName === 'string' ? data.beneficiaryName.slice(0, 100) : '',
+      ...paymentMethodFields(paymentMethods),
       updatedAt: FieldValue.serverTimestamp(),
     }
     transaction.update(linkRef, patch)
@@ -134,6 +193,7 @@ export const createCheckoutOrder = onCall({ region, enforceAppCheck: false }, as
   const linkSnap = await linkRef.get()
   if (!linkSnap.exists || linkSnap.get('isActive') !== true) fail('not-found', 'Este enlace ya no está disponible.')
   const link = linkSnap.data()!
+  let selectedMethod = selectPaymentMethod(link, data.paymentProvider)
   const rawItems = data.items
   if (!Array.isArray(rawItems) || rawItems.length < 1 || rawItems.length > 50) fail('invalid-argument', 'El pedido no tiene productos válidos.')
   const catalog = new Map<string, { name: string; unitPrice: number }>(
@@ -189,6 +249,7 @@ export const createCheckoutOrder = onCall({ region, enforceAppCheck: false }, as
   await db.runTransaction(async (transaction) => {
     const [currentLink, rateLimit] = await Promise.all([transaction.get(linkRef), transaction.get(rateRef)])
     if (!currentLink.exists || currentLink.get('isActive') !== true) fail('not-found', 'Este enlace ya no está disponible.')
+    selectedMethod = selectPaymentMethod(currentLink.data() as Record<string, unknown>, data.paymentProvider)
     if ((rateLimit.get('count') ?? 0) >= 25) fail('resource-exhausted', 'Se alcanzó el límite temporal de pedidos. Inténtalo más tarde.')
     transaction.set(rateRef, {
       count: Number(rateLimit.get('count') ?? 0) + 1,
@@ -205,6 +266,7 @@ export const createCheckoutOrder = onCall({ region, enforceAppCheck: false }, as
       items,
       totalAmount,
       checkoutChannel: channel,
+      paymentProvider: selectedMethod.provider,
       paymentStatus: 'PENDING',
       deliveryStatus: 'PENDING_DELIVERY',
       matchedNotificationId: null,
@@ -217,11 +279,12 @@ export const createCheckoutOrder = onCall({ region, enforceAppCheck: false }, as
       totalAmount,
       paymentStatus: 'PENDING',
       deliveryStatus: 'PENDING_DELIVERY',
+      paymentProvider: selectedMethod.provider,
       updatedAt: FieldValue.serverTimestamp(),
       expiresAt: Timestamp.fromMillis(Date.now() + 48 * 60 * 60 * 1000),
     })
   })
-  return { orderId: orderRef.id, sessionId: sessionRef.id, orderCode, totalAmount }
+  return { orderId: orderRef.id, sessionId: sessionRef.id, orderCode, totalAmount, paymentProvider: selectedMethod.provider }
 })
 
 export const mirrorCheckoutStatus = onDocumentUpdated({ document: 'orders/{orderId}', region }, async (event) => {

@@ -1,0 +1,18 @@
+.google-logo{width:18px;height:18px;object-fit:contain;flex:none}
+.wallet-editor-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:15px 0}
+.wallet-config-card{display:grid;gap:9px;padding:12px;border:1px solid var(--line);border-radius:13px;background:#fff;min-width:0}
+.wallet-config-card.selected{border-color:#78a0e4;box-shadow:0 0 0 2px rgba(44,105,220,.08)}
+.wallet-config-card input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.wallet-choice{display:flex;align-items:center;justify-content:center;gap:8px;min-height:38px;padding:7px 10px;border:1px solid #e2e9f2;border-radius:9px;background:#fff;color:#344965;font-size:11px;font-weight:700}
+.wallet-choice.selected{border-color:#8eafe4;background:#f5f8ff;color:#1f5db8}
+.wallet-choice-logo{width:25px;height:25px;object-fit:contain;flex:none}
+.wallet-other-logo{display:grid;place-items:center;border-radius:50%;background:#edf3fb;color:#426a9d;font-size:10px;font-weight:800}
+.qr-upload-box{display:flex;min-height:64px;align-items:center;justify-content:center;flex-wrap:wrap;gap:5px;padding:9px;border:1px dashed #cbd6e4;border-radius:9px;background:#f8fafc;color:#58708f;text-align:center;font-size:10px;font-weight:700;cursor:pointer;overflow:hidden}
+.qr-upload-box small{width:100%;font-size:8px;font-weight:400;color:#8290a2}
+.wallet-text-input{width:100%;min-width:0;padding:9px 10px;border:1px solid #e2e8f0;border-radius:8px;color:#344965;font:inherit;font-size:10px;outline:none}
+.wallet-text-input:focus{border-color:#81a4dc;box-shadow:0 0 0 2px rgba(44,105,220,.08)}
+.checkout-wallet-options{display:flex;gap:8px;flex-wrap:wrap;margin:13px 0}
+.checkout-wallet-options .wallet-choice{flex:1;min-width:105px}
+.wallet-modal-method{display:flex;align-items:center;justify-content:center;gap:8px;color:#405775;font-size:11px;margin:2px 0 12px}
+.wallet-modal-method span{color:#7c8a9b;font-size:10px}
+@media(max-width:720px){.wallet-editor-grid{grid-template-columns:1fr}.wallet-config-card{grid-template-columns:1fr 1fr}.wallet-config-card>.wallet-choice{grid-column:1/-1}.qr-upload-box{grid-row:span 2}.wallet-config-card>.wallet-text-input{min-height:42px}}

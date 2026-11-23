@@ -7,6 +7,8 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,6 +71,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -89,8 +92,10 @@ import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.DocumentSnapshot
 import com.lantonium.veripago.AppGraph
 import com.lantonium.veripago.BuildConfig
+import com.lantonium.veripago.R
 import com.lantonium.veripago.data.FirebaseClients
 import com.lantonium.veripago.data.GoogleAuthRepository
 import com.lantonium.veripago.data.OrderEntity
@@ -107,6 +112,21 @@ import java.text.NumberFormat
 private val Navy = Color(0xFF0C2442)
 private val Muted = Color(0xFF758398)
 private val Green = Color(0xFF15966A)
+
+private data class AndroidPaymentMethod(
+    val provider: String,
+    val qrImageUrl: String,
+    val paymentKeyLabel: String,
+    val beneficiaryName: String,
+)
+
+private val paymentProviderNames = mapOf("NEQUI" to "Nequi", "DAVIPLATA" to "DaviPlata", "BRE_B" to "Bre-B", "OTHER" to "Otro QR")
+private fun paymentProviderLogo(provider: String): Int? = when (provider) {
+    "NEQUI" -> R.drawable.logo_nequi
+    "DAVIPLATA" -> R.drawable.logo_daviplata
+    "BRE_B" -> R.drawable.logo_breb
+    else -> null
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -290,7 +310,11 @@ private fun FeatureLine(icon: androidx.compose.ui.graphics.vector.ImageVector, l
 private fun LoginDialog(role: String, error: String, configured: Boolean, onRoleChange: (String) -> Unit, onDismiss: () -> Unit, onContinue: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Continuar con Google", color = Navy, fontWeight = FontWeight.Bold) },
+        title = { Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(painterResource(R.drawable.google_logo), contentDescription = null, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Continuar con Google", color = Navy, fontWeight = FontWeight.Bold)
+        } },
         text = {
             Column {
                 Text("Elige tu perfil para configurar tu cuenta.", color = Muted, fontSize = 12.sp)
@@ -299,7 +323,11 @@ private fun LoginDialog(role: String, error: String, configured: Boolean, onRole
                 if (error.isNotBlank()) Text(error, color = Color(0xFFB44743), fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
             }
         },
-        confirmButton = { Button(onClick = onContinue, enabled = configured) { Text("Continuar") } },
+        confirmButton = { Button(onClick = onContinue, enabled = configured) {
+            Image(painterResource(R.drawable.google_logo), contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(7.dp))
+            Text("Continuar con Google")
+        } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
     )
 }
@@ -318,7 +346,9 @@ private fun MerchantScreen(profile: UserProfile, onError: (String) -> Unit) {
     var price by rememberSaveable { mutableStateOf("") }
     var quantity by rememberSaveable { mutableStateOf("1") }
     var busy by remember { mutableStateOf(false) }
-    var qrState by remember { mutableStateOf<Triple<String, String, Long>?>(null) }
+    var qrState by remember { mutableStateOf<Triple<AndroidPaymentMethod, String, Long>?>(null) }
+    var configuredPaymentMethods by remember { mutableStateOf<List<AndroidPaymentMethod>>(emptyList()) }
+    var selectedPaymentProvider by rememberSaveable { mutableStateOf("NEQUI") }
     var latestOrders by remember { mutableStateOf<List<OrderEntity>>(emptyList()) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -326,8 +356,20 @@ private fun MerchantScreen(profile: UserProfile, onError: (String) -> Unit) {
     LaunchedEffect(profile.uid) {
         val sync = AppGraph.syncManager()
         sync.start(profile.uid)
+        runCatching {
+            val firestore = FirebaseClients.firestore ?: return@runCatching
+            val link = firestore.collection("payment_links").whereEqualTo("merchantId", profile.uid)
+                .whereEqualTo("defaultMode", "IN_SITU_QR").whereEqualTo("isActive", true).limit(1).get().await().documents.firstOrNull()
+            if (link != null) {
+                configuredPaymentMethods = parsePaymentMethods(link)
+                if (configuredPaymentMethods.none { it.provider == selectedPaymentProvider }) {
+                    selectedPaymentProvider = configuredPaymentMethods.firstOrNull()?.provider ?: "NEQUI"
+                }
+            }
+        }
         AppGraph.payments.observeOrders(profile.uid).collect { latestOrders = it }
     }
+    val selectedPaymentMethod = configuredPaymentMethods.find { it.provider == selectedPaymentProvider }
 
     LazyColumn(Modifier.fillMaxSize().background(Color(0xFFF5F7FA)).padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
         item {
@@ -359,13 +401,30 @@ private fun MerchantScreen(profile: UserProfile, onError: (String) -> Unit) {
                         Text("Total exacto", color = Muted, fontSize = 11.sp)
                         Text(formatCop(amount), color = Navy, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        (listOf("NEQUI", "DAVIPLATA", "BRE_B") + if (configuredPaymentMethods.any { it.provider == "OTHER" }) listOf("OTHER") else emptyList()).forEach { provider ->
+                            val method = configuredPaymentMethods.find { it.provider == provider }
+                            Column(
+                                modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
+                                    .background(if (selectedPaymentProvider == provider) Color(0xFFEAF2FF) else Color(0xFFF5F7FA))
+                                    .clickable(enabled = method != null) { selectedPaymentProvider = provider }
+                                    .padding(vertical = 8.dp, horizontal = 4.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                paymentProviderLogo(provider)?.let { Image(painterResource(it), contentDescription = paymentProviderNames[provider], modifier = Modifier.size(27.dp)) }
+                                    ?: Icon(Icons.Default.QrCode2, contentDescription = paymentProviderNames[provider], tint = Muted, modifier = Modifier.size(27.dp))
+                                Text(paymentProviderNames[provider].orEmpty(), color = if (method != null) Navy else Muted, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                    if (configuredPaymentMethods.isEmpty()) Text("Configura tus QR de Nequi, DaviPlata o Bre-B desde VeriPago Web.", color = Muted, fontSize = 10.sp)
                     Button(
-                        enabled = !busy && amount > 0,
+                        enabled = !busy && amount > 0 && selectedPaymentMethod != null,
                         onClick = {
                             scope.launch {
                                 busy = true
                                 try {
-                                    val result = createInSituOrder(profile, productName.ifBlank { "Pedido rápido" }, price.toLong(), quantity.toIntOrNull()?.coerceIn(1, 100) ?: 1)
+                                    val result = createInSituOrder(profile, productName.ifBlank { "Pedido rápido" }, price.toLong(), quantity.toIntOrNull()?.coerceIn(1, 100) ?: 1, selectedPaymentProvider)
                                     qrState = Triple(result.first, result.second, amount)
                                 } catch (exception: Exception) { onError(exception.localizedMessage ?: "No se pudo crear el cobro.") }
                                 finally { busy = false }
@@ -409,14 +468,15 @@ private fun MerchantScreen(profile: UserProfile, onError: (String) -> Unit) {
         item { Spacer(Modifier.height(10.dp)) }
     }
 
-    qrState?.let { (imageUrl, orderCode, total) ->
+    qrState?.let { (method, orderCode, total) ->
         AlertDialog(
             onDismissRequest = { qrState = null },
             title = { Text("Escanea y paga", color = Navy, fontWeight = FontWeight.Bold) },
             text = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                    if (imageUrl.isNotBlank()) AsyncImage(imageUrl, contentDescription = "QR de pago del comercio", modifier = Modifier.size(205.dp).clip(RoundedCornerShape(10.dp)))
+                    if (method.qrImageUrl.isNotBlank()) AsyncImage(method.qrImageUrl, contentDescription = "QR de ${paymentProviderNames[method.provider] ?: "pago"}", modifier = Modifier.size(205.dp).clip(RoundedCornerShape(10.dp)))
                     else Text("Configura el QR de tu comercio desde la web para mostrarlo aquí.", color = Muted, textAlign = TextAlign.Center, fontSize = 11.sp)
+                    Spacer(Modifier.height(6.dp)); Text("${paymentProviderNames[method.provider] ?: method.provider} · ${method.paymentKeyLabel}", color = Muted, fontSize = 10.sp)
                     Spacer(Modifier.height(9.dp)); Text(orderCode, color = Muted, fontSize = 11.sp); Text(formatCop(total), color = Navy, fontWeight = FontWeight.Bold, fontSize = 25.sp)
                     Spacer(Modifier.height(6.dp)); Text("Esperando confirmación del pago…", color = Green, fontSize = 10.sp)
                 }
@@ -426,19 +486,38 @@ private fun MerchantScreen(profile: UserProfile, onError: (String) -> Unit) {
     }
 }
 
-private suspend fun createInSituOrder(profile: UserProfile, name: String, unitPrice: Long, quantity: Int): Pair<String, String> = withContext(Dispatchers.IO) {
+private fun parsePaymentMethods(link: DocumentSnapshot): List<AndroidPaymentMethod> {
+    val methods = (link.get("paymentMethods") as? List<*>)?.mapNotNull { item ->
+        val value = item as? Map<*, *> ?: return@mapNotNull null
+        val provider = value["provider"] as? String ?: return@mapNotNull null
+        if (provider !in paymentProviderNames.keys) return@mapNotNull null
+        val qr = value["qrImageUrl"] as? String ?: return@mapNotNull null
+        if (qr.isBlank()) return@mapNotNull null
+        AndroidPaymentMethod(provider, qr, value["paymentKeyLabel"] as? String ?: "", value["beneficiaryName"] as? String ?: "")
+    }.orEmpty()
+    if (methods.isNotEmpty()) return methods
+    val legacyQr = link.getString("qrImageUrl").orEmpty()
+    if (legacyQr.isBlank()) return emptyList()
+    val legacyProvider = link.getString("paymentProvider")?.takeIf { it in paymentProviderNames.keys } ?: "OTHER"
+    return listOf(AndroidPaymentMethod(legacyProvider, legacyQr, link.getString("paymentKeyLabel").orEmpty(), link.getString("beneficiaryName").orEmpty()))
+}
+
+private suspend fun createInSituOrder(profile: UserProfile, name: String, unitPrice: Long, quantity: Int, provider: String): Pair<AndroidPaymentMethod, String> = withContext(Dispatchers.IO) {
     val firestore = FirebaseClients.firestore ?: error("Configura Firebase para crear cobros.")
     val functions = FirebaseClients.functions ?: error("Cloud Functions no está disponible.")
     val links = firestore.collection("payment_links").whereEqualTo("merchantId", profile.uid)
         .whereEqualTo("defaultMode", "IN_SITU_QR").whereEqualTo("isActive", true).limit(1).get().await()
     val link = links.documents.firstOrNull() ?: error("Configura tu QR de pago desde VeriPago Web antes del primer cobro.")
+    val paymentMethod = parsePaymentMethods(link).find { it.provider == provider }
+        ?: error("Configura un QR activo para ${paymentProviderNames[provider] ?: "ese medio de pago"} desde VeriPago Web.")
     val productId = "android-quick-item"
     functions.getHttpsCallable("updatePaymentLink").call(mapOf(
         "id" to link.id,
         "schemaJson" to mapOf("products" to listOf(mapOf("id" to productId, "name" to name, "unitPrice" to unitPrice))),
-        "qrImageUrl" to link.getString("qrImageUrl").orEmpty(),
-        "paymentKeyLabel" to link.getString("paymentKeyLabel").orEmpty(),
-        "beneficiaryName" to link.getString("beneficiaryName").orEmpty(),
+        "qrImageUrl" to paymentMethod.qrImageUrl,
+        "paymentKeyLabel" to paymentMethod.paymentKeyLabel,
+        "beneficiaryName" to paymentMethod.beneficiaryName,
+        "paymentProvider" to paymentMethod.provider,
     )).await()
     val result = functions.getHttpsCallable("createCheckoutOrder").call(mapOf(
         "linkId" to link.id,
@@ -446,9 +525,9 @@ private suspend fun createInSituOrder(profile: UserProfile, name: String, unitPr
         "customerName" to "Cliente en mostrador",
         "customerPhone" to "",
         "checkoutChannel" to "MOBILE_IN_SITU_QR",
+        "paymentProvider" to paymentMethod.provider,
     )).await().data as Map<*, *>
-    val updated = firestore.collection("payment_links").document(link.id).get().await()
-    (updated.getString("qrImageUrl").orEmpty()) to (result["orderCode"] as? String ?: "Pedido VeriPago")
+    paymentMethod to (result["orderCode"] as? String ?: "Pedido VeriPago")
 }
 
 private suspend fun createShareLink(profile: UserProfile, name: String, price: Long): String = withContext(Dispatchers.IO) {
@@ -466,6 +545,13 @@ private suspend fun createShareLink(profile: UserProfile, name: String, price: L
         "qrImageUrl" to qrLink.getString("qrImageUrl").orEmpty(),
         "paymentKeyLabel" to qrLink.getString("paymentKeyLabel").orEmpty(),
         "beneficiaryName" to qrLink.getString("beneficiaryName").orEmpty(),
+        "paymentProvider" to qrLink.getString("paymentProvider").orEmpty(),
+        "paymentMethods" to parsePaymentMethods(qrLink).map { method -> mapOf(
+            "provider" to method.provider,
+            "qrImageUrl" to method.qrImageUrl,
+            "paymentKeyLabel" to method.paymentKeyLabel,
+            "beneficiaryName" to method.beneficiaryName,
+        ) },
     )).await().data as Map<*, *>
     "https://lantonium.com/VeriPago/${result["slug"]}"
 }

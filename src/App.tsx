@@ -12,6 +12,10 @@ import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import brand from '../assets/veripago-brand.webp'
 import webDemo from '../assets/VeriPago_Webgif.gif'
 import mobileDemo from '../assets/VeriPago_Movilgif.gif'
+import googleLogo from '../assets/google.png'
+import breBLogo from '../assets/logo_breb.png'
+import daviplataLogo from '../assets/logo_daviplata.png'
+import nequiLogo from '../assets/logo_nequi.png'
 import { auth, db, functions, isFirebaseConfigured, storage } from './lib/firebase'
 import {
   createCheckout, createPaymentLink, getApkRelease, getOrders, getPaymentLinkBySlug,
@@ -19,11 +23,48 @@ import {
 } from './lib/data'
 import { calculateOrderTotal, formatCOP, slugify } from './lib/money'
 import { parseNotification } from './lib/bankParser'
-import type { OrderRecord, PaymentLink, Product, Role, UserProfile } from './lib/types'
+import type { OrderRecord, PaymentLink, PaymentMethod, PaymentProvider, Product, Role, UserProfile } from './lib/types'
 
 const roleNames: Record<Role, string> = {
   COMERCIANTE: 'Comerciante', USUARIO: 'Cliente', ADMINISTRADOR: 'Administrador',
 }
+
+const walletProviders: Array<{ id: PaymentProvider; label: string; logo?: string }> = [
+  { id: 'NEQUI', label: 'Nequi', logo: nequiLogo },
+  { id: 'DAVIPLATA', label: 'DaviPlata', logo: daviplataLogo },
+  { id: 'BRE_B', label: 'Bre-B', logo: breBLogo },
+  { id: 'OTHER', label: 'Otro QR' },
+]
+
+function paymentMethodsForLink(link: PaymentLink): PaymentMethod[] {
+  const methods = link.paymentMethods?.filter((method) => method.qrImageUrl) ?? []
+  if (methods.length) return methods
+  if (!link.qrImageUrl) return []
+  return [{
+    provider: link.paymentProvider ?? 'OTHER',
+    qrImageUrl: link.qrImageUrl,
+    paymentKeyLabel: link.paymentKeyLabel,
+    beneficiaryName: link.beneficiaryName,
+  }]
+}
+
+function PaymentProviderLogo({ provider, className = '' }: { provider: PaymentProvider; className?: string }) {
+  const wallet = walletProviders.find((item) => item.id === provider)
+  return wallet?.logo
+    ? <img src={wallet.logo} alt="" aria-hidden="true" className={className} />
+    : <span className={`wallet-other-logo ${className}`}>QR</span>
+}
+
+function PaymentProviderChoice({ provider, selected, onSelect }: { provider: PaymentProvider; selected: boolean; onSelect: () => void }) {
+  const wallet = walletProviders.find((item) => item.id === provider)!
+  return <button type="button" className={`wallet-choice${selected ? ' selected' : ''}`} onClick={onSelect} aria-pressed={selected}>
+    <PaymentProviderLogo provider={provider} className="wallet-choice-logo" />
+    <span>{wallet.label}</span>
+  </button>
+}
+
+type WalletDraft = { qrImageUrl: string; paymentKeyLabel: string; beneficiaryName: string; file: File | null }
+const emptyWalletDraft = (): WalletDraft => ({ qrImageUrl: '', paymentKeyLabel: '', beneficiaryName: '', file: null })
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null)
@@ -73,7 +114,7 @@ export default function App() {
         {user ? <div className="user-menu">
           <Link className="avatar-link" to={homeForRole(user.role)}><img src={user.photoUrl || brand} alt="" /><span>{user.displayName.split(' ')[0]}</span><ChevronDown size={15} /></Link>
           <button className="icon-button" title="Cerrar sesión" onClick={signOut}><LogOut size={17} /></button>
-        </div> : <button className="button button-small button-light" onClick={() => setLoginOpen(true)}>Continuar con Google <ArrowRight size={15} /></button>}
+        </div> : <button className="button button-small button-light" onClick={() => setLoginOpen(true)}><GoogleMark /> Continuar con Google <ArrowRight size={15} /></button>}
         <button className="menu-toggle" onClick={() => setMenuOpen(!menuOpen)} aria-label="Abrir menú">{menuOpen ? <X /> : <Menu />}</button>
       </div>
     </header>
@@ -153,10 +194,10 @@ function LoginModal({ error, onClose, onChoose }: { error: string; onClose: () =
   </div></div>
 }
 
-function GoogleMark() { return <svg viewBox="0 0 48 48" width="19" height="19" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3A12 12 0 1 1 32 15.3l5.7-5.7A20 20 0 1 0 44 24c0-1.2-.1-2.3-.4-3.5Z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8A12 12 0 0 1 32 15.3l5.7-5.7A20 20 0 0 0 6.3 14.7Z"/><path fill="#4CAF50" d="M24 44c5.2 0 10-2 13.6-5.3l-6.3-5.3A12 12 0 0 1 12.8 29l-6.5 5A20 20 0 0 0 24 44Z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3a12 12 0 0 1-4.1 5.4h.1l6.3 5.3C37.2 39 44 34 44 24c0-1.2-.1-2.3-.4-3.5Z"/></svg> }
+function GoogleMark() { return <img src={googleLogo} alt="" aria-hidden="true" className="google-logo" /> }
 
 function AccessGate({ user, openLogin }: { user: UserProfile | null; openLogin: () => void }) {
-  return <main className="access-gate"><div className="access-card"><span className="access-icon"><ShieldCheck /></span><h2>Este espacio es para usuarios registrados</h2><p>{user ? `Tu perfil actual es ${roleNames[user.role]}.` : 'Inicia sesión para continuar con tu cuenta VeriPago.'}</p>{user ? <Link className="button button-primary" to={homeForRole(user.role)}>Ir a mi espacio</Link> : <button className="button button-primary" onClick={openLogin}>Continuar con Google <ArrowRight size={16} /></button>}</div></main>
+  return <main className="access-gate"><div className="access-card"><span className="access-icon"><ShieldCheck /></span><h2>Este espacio es para usuarios registrados</h2><p>{user ? `Tu perfil actual es ${roleNames[user.role]}.` : 'Inicia sesión para continuar con tu cuenta VeriPago.'}</p>{user ? <Link className="button button-primary" to={homeForRole(user.role)}>Ir a mi espacio</Link> : <button className="button button-primary" onClick={openLogin}><GoogleMark /> Continuar con Google <ArrowRight size={16} /></button>}</div></main>
 }
 
 function PublicCheckout() {
@@ -167,6 +208,7 @@ function PublicCheckout() {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [quantities, setQuantities] = useState<Record<string, number>>({})
+  const [paymentProvider, setPaymentProvider] = useState<PaymentProvider | ''>('')
   const [sessionId, setSessionId] = useState('')
   const [orderCode, setOrderCode] = useState('')
   const [status, setStatus] = useState('PENDING')
@@ -174,13 +216,15 @@ function PublicCheckout() {
   useEffect(() => { getPaymentLinkBySlug(slug).then((value) => { setLink(value); setLoading(false) }).catch((e) => { setError(errorText(e)); setLoading(false) }) }, [slug])
   useEffect(() => sessionId ? watchCheckoutSession(sessionId, (data) => { if (data?.paymentStatus) setStatus(String(data.paymentStatus)) }) : undefined, [sessionId])
   const items = link?.schemaJson.products ?? []
+  const paymentMethods = link ? paymentMethodsForLink(link) : []
+  const selectedPaymentMethod = paymentMethods.find((method) => method.provider === paymentProvider) ?? paymentMethods[0]
   const total = calculateOrderTotal(items.map((item) => ({ unitPrice: item.unitPrice, qty: quantities[item.id] ?? 1 })))
   const submit = async () => {
     if (!link) return
     if (!name.trim() || phone.replace(/\D/g, '').length < 7) { setError('Ingresa tu nombre y un teléfono válido para continuar.'); return }
     setSaving(true); setError('')
     try {
-      const checkout = await createCheckout({ linkId: link.id, items: items.map((item) => ({ productId: item.id, qty: Math.min(100, quantities[item.id] ?? 1) })), customerName: name.trim(), customerPhone: phone.trim(), checkoutChannel: 'WHATSAPP_LINK' })
+      const checkout = await createCheckout({ linkId: link.id, items: items.map((item) => ({ productId: item.id, qty: Math.min(100, quantities[item.id] ?? 1) })), customerName: name.trim(), customerPhone: phone.trim(), checkoutChannel: 'WHATSAPP_LINK', ...(selectedPaymentMethod ? { paymentProvider: selectedPaymentMethod.provider } : {}) })
       setSessionId(checkout.sessionId); setOrderCode(checkout.orderCode)
     } catch (e) { setError(errorText(e)) }
     finally { setSaving(false) }
@@ -196,7 +240,8 @@ function PublicCheckout() {
           <label className="field-label">Tu nombre<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre y apellido" autoComplete="name" /></label><label className="field-label">WhatsApp o teléfono<input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="300 000 0000" inputMode="tel" autoComplete="tel" /></label>
         </>}
         <div className="checkout-total"><span>Total a transferir</span><strong>{formatCOP(total)}</strong></div>
-        {link.qrImageUrl && <div className="merchant-qr"><img src={link.qrImageUrl} alt={`Código QR de pago para ${link.beneficiaryName || link.title}`} /><div><b>{link.paymentKeyLabel || 'Escanea para pagar'}</b><small>El dinero llega directamente al comercio</small></div></div>}
+        {paymentMethods.length > 0 && <div className="checkout-wallet-options" aria-label="Elige cómo pagar">{paymentMethods.map((method) => <PaymentProviderChoice key={method.provider} provider={method.provider} selected={(selectedPaymentMethod?.provider ?? '') === method.provider} onSelect={() => setPaymentProvider(method.provider)} />)}</div>}
+        {selectedPaymentMethod && <div className="merchant-qr"><img src={selectedPaymentMethod.qrImageUrl} alt={`Código QR de pago para ${selectedPaymentMethod.beneficiaryName || link.title}`} /><div><b>{selectedPaymentMethod.paymentKeyLabel || 'Escanea para pagar'}</b><small>Transfiere con {walletProviders.find((item) => item.id === selectedPaymentMethod.provider)?.label ?? 'tu billetera'} directamente al comercio</small></div></div>}
         {error && <div className="inline-error">{error}</div>}
         {!sessionId ? <button className="button button-primary button-full" onClick={submit} disabled={saving || total <= 0}>{saving ? 'Preparando pedido…' : <>Confirmar pedido <ArrowRight size={17} /></>}</button> : <div className="waiting-banner"><span className="spinner" /><span>Esperando que el comercio confirme tu pago</span></div>}
         <div className="checkout-privacy"><ShieldCheck size={14} /> Tu transferencia es directa. VeriPago no retiene tu dinero.</div>
@@ -210,15 +255,13 @@ function MerchantDashboard({ user }: { user: UserProfile }) {
   const [links, setLinks] = useState<PaymentLink[]>([])
   const [error, setError] = useState('')
   const [working, setWorking] = useState(false)
-  const [qrModal, setQrModal] = useState<{ url: string; code: string; total: number } | null>(null)
+  const [qrModal, setQrModal] = useState<{ url: string; code: string; total: number; paymentProvider: PaymentProvider; paymentKeyLabel: string } | null>(null)
   const [title, setTitle] = useState('Pedido rápido')
   const [productName, setProductName] = useState('')
   const [price, setPrice] = useState('')
   const [qty, setQty] = useState(1)
-  const [qrUrl, setQrUrl] = useState('')
-  const [qrLabel, setQrLabel] = useState('')
-  const [beneficiary, setBeneficiary] = useState(user.displayName)
-  const [file, setFile] = useState<File | null>(null)
+  const [selectedProvider, setSelectedProvider] = useState<PaymentProvider>('NEQUI')
+  const [walletDrafts, setWalletDrafts] = useState<Record<PaymentProvider, WalletDraft>>({ NEQUI: emptyWalletDraft(), DAVIPLATA: emptyWalletDraft(), BRE_B: emptyWalletDraft(), OTHER: emptyWalletDraft() })
   const [filter, setFilter] = useState('')
 
   const refresh = async () => {
@@ -228,7 +271,14 @@ function MerchantDashboard({ user }: { user: UserProfile }) {
         getDocs(query(collection(db!, 'payment_links'), where('merchantId', '==', user.uid), orderBy('createdAt', 'desc'))),
       ])
       setOrders(loadedOrders)
-      setLinks(linkSnap.docs.map((item) => ({ ...item.data(), id: item.id }) as PaymentLink))
+      const loadedLinks = linkSnap.docs.map((item) => ({ ...item.data(), id: item.id }) as PaymentLink)
+      setLinks(loadedLinks)
+      const currentMethods = paymentMethodsForLink(loadedLinks.find((item) => item.defaultMode === 'IN_SITU_QR') ?? ({ qrImageUrl: '' } as PaymentLink))
+      setWalletDrafts((previous) => {
+        const next = { ...previous }
+        for (const method of currentMethods) next[method.provider] = { qrImageUrl: method.qrImageUrl, paymentKeyLabel: method.paymentKeyLabel ?? '', beneficiaryName: method.beneficiaryName ?? '', file: null }
+        return next
+      })
     } catch (e) { setError(errorText(e)) }
   }
   useEffect(() => { if (db) void refresh() }, [user.uid])
@@ -236,48 +286,53 @@ function MerchantDashboard({ user }: { user: UserProfile }) {
   const product: Product = { id: 'quick-product', name: productName || 'Pedido', unitPrice: Number.isSafeInteger(parsedPrice) && parsedPrice > 0 ? parsedPrice : 0 }
   const total = calculateOrderTotal([{ unitPrice: product.unitPrice, qty }])
 
+  const saveWalletMethods = async () => {
+    const methods: PaymentMethod[] = []
+    for (const wallet of walletProviders) {
+      const draft = walletDrafts[wallet.id]
+      const qrImageUrl = draft.file ? await uploadQr(user.uid, draft.file) : draft.qrImageUrl
+      if (qrImageUrl) methods.push({ provider: wallet.id, qrImageUrl, paymentKeyLabel: draft.paymentKeyLabel.trim(), beneficiaryName: draft.beneficiaryName.trim() || user.displayName })
+    }
+    if (!methods.length) throw new Error('Configura al menos un QR de Nequi, DaviPlata o Bre-B.')
+    return methods
+  }
+
   const createQrOrder = async () => {
     if (!db || !functions) { setError('Configura Firebase antes de crear pedidos.'); return }
     if (!product.unitPrice) { setError('Ingresa un valor mayor a cero.'); return }
-    if (!file && !qrUrl && !links.some((item) => item.qrImageUrl)) { setError('Sube primero el QR de tu billetera para mostrarlo al cliente.'); return }
     setWorking(true); setError('')
     try {
       const currentLink = links.find((item) => item.defaultMode === 'IN_SITU_QR')
+      const methods = await saveWalletMethods()
+      const method = methods.find((item) => item.provider === selectedProvider) ?? methods[0]
+      setSelectedProvider(method.provider)
       let linkId = ''
-      let orderQrUrl = ''
       if (currentLink) {
-        const savedQr = file ? await uploadQr(user.uid, file) : currentLink.qrImageUrl || qrUrl
-        setQrUrl(savedQr)
         linkId = currentLink.id
-        orderQrUrl = savedQr
-        await updatePaymentLink({ id: currentLink.id, schemaJson: { products: [product] }, qrImageUrl: savedQr, paymentKeyLabel: qrLabel || currentLink.paymentKeyLabel, beneficiaryName: beneficiary || currentLink.beneficiaryName })
+        await updatePaymentLink({ id: currentLink.id, schemaJson: { products: [product] }, qrImageUrl: method.qrImageUrl, paymentKeyLabel: method.paymentKeyLabel, beneficiaryName: method.beneficiaryName, paymentProvider: method.provider, paymentMethods: methods })
       } else {
-        const created = await ensureQuickLink()
+        const created = await ensureQuickLink(methods, method)
         linkId = created.id
-        orderQrUrl = created.qrUrl
       }
-      const result = await createCheckout({ linkId, items: [{ productId: product.id, qty }], customerName: 'Cliente en mostrador', customerPhone: '', checkoutChannel: 'WEB_IN_SITU_QR' })
-      setQrModal({ url: orderQrUrl, code: result.orderCode, total: result.totalAmount })
+      const result = await createCheckout({ linkId, items: [{ productId: product.id, qty }], customerName: 'Cliente en mostrador', customerPhone: '', checkoutChannel: 'WEB_IN_SITU_QR', paymentProvider: method.provider })
+      setQrModal({ url: method.qrImageUrl, code: result.orderCode, total: result.totalAmount, paymentProvider: method.provider, paymentKeyLabel: method.paymentKeyLabel })
       await refresh()
     } catch (e) { setError(errorText(e)) }
     finally { setWorking(false) }
   }
 
-  const ensureQuickLink = async () => {
-    const savedQr = file ? await uploadQr(user.uid, file) : qrUrl
-    setQrUrl(savedQr)
-    const created = await createPaymentLink({ slug: 'cobro-rapido', title: 'Cobro rápido', defaultMode: 'IN_SITU_QR', schemaJson: { products: [product] }, qrImageUrl: savedQr, paymentKeyLabel: qrLabel, beneficiaryName: beneficiary })
-    return { id: created.id, qrUrl: savedQr }
+  const ensureQuickLink = async (methods: PaymentMethod[], primary: PaymentMethod) => {
+    const created = await createPaymentLink({ slug: 'cobro-rapido', title: 'Cobro rápido', defaultMode: 'IN_SITU_QR', schemaJson: { products: [product] }, qrImageUrl: primary.qrImageUrl, paymentKeyLabel: primary.paymentKeyLabel, beneficiaryName: primary.beneficiaryName, paymentProvider: primary.provider, paymentMethods: methods })
+    return { id: created.id }
   }
 
   const createShareLink = async () => {
     if (!product.unitPrice) { setError('Agrega al menos un producto con precio antes de compartir.'); return }
-    if (!file && !qrUrl && !links.some((item) => item.qrImageUrl)) { setError('Sube primero el QR de tu billetera para compartir un enlace que tus clientes puedan pagar.'); return }
     setWorking(true); setError('')
     try {
-      const savedQr = file ? await uploadQr(user.uid, file) : qrUrl || links.find((item) => item.qrImageUrl)?.qrImageUrl || ''
-      setQrUrl(savedQr)
-      const created = await createPaymentLink({ slug: `${slugify(title) || 'pedido'}-${Math.random().toString(36).slice(2, 6)}`, title, defaultMode: 'WHATSAPP_LINK', schemaJson: { products: [product], captureCustomerInfo: true }, qrImageUrl: savedQr, paymentKeyLabel: qrLabel, beneficiaryName: beneficiary })
+      const methods = await saveWalletMethods()
+      const primary = methods.find((item) => item.provider === selectedProvider) ?? methods[0]
+      const created = await createPaymentLink({ slug: `${slugify(title) || 'pedido'}-${Math.random().toString(36).slice(2, 6)}`, title, defaultMode: 'WHATSAPP_LINK', schemaJson: { products: [product], captureCustomerInfo: true }, qrImageUrl: primary.qrImageUrl, paymentKeyLabel: primary.paymentKeyLabel, beneficiaryName: primary.beneficiaryName, paymentProvider: primary.provider, paymentMethods: methods })
       const url = `${window.location.origin}/VeriPago/${created.slug}`
       window.open(`https://wa.me/?text=${encodeURIComponent(`Hola, completa tu pedido de ${title}: ${url}`)}`, '_blank', 'noopener,noreferrer')
       await refresh()
@@ -292,6 +347,7 @@ function MerchantDashboard({ user }: { user: UserProfile }) {
 
   const filteredOrders = orders.filter((order) => `${order.customerName} ${order.orderCode}`.toLowerCase().includes(filter.toLowerCase()))
   const paidTotal = orders.filter((order) => order.paymentStatus.startsWith('VERIFIED')).reduce((sum, order) => sum + order.totalAmount, 0)
+  const updateWalletDraft = (provider: PaymentProvider, changes: Partial<WalletDraft>) => setWalletDrafts((drafts) => ({ ...drafts, [provider]: { ...drafts[provider], ...changes } }))
 
   return <DashboardShell user={user} eyebrow="ESPACIO COMERCIANTE" title="Tu negocio, en orden." subtitle="Cobra sin fricción y entrega con la tranquilidad de un pago verificado.">
     <div className="dashboard-stats"><Stat icon={<Wallet />} label="Recaudado verificado" value={formatCOP(paidTotal)} tone="green" /><Stat icon={<Clock3 />} label="Por confirmar" value={`${orders.filter((o) => o.paymentStatus === 'PENDING').length} pedidos`} tone="purple" /><Stat icon={<Link2 />} label="Enlaces activos" value={`${links.filter((l) => l.isActive).length}`} tone="blue" /></div>
@@ -300,7 +356,13 @@ function MerchantDashboard({ user }: { user: UserProfile }) {
     {tab === 'cobrar' && <div className="merchant-grid"><section className="panel composer-panel"><div className="panel-heading"><span className="panel-heading-icon"><QrCode size={20} /></span><div><h2>Arma un cobro</h2><p>Configura el valor y elige cómo cobrar.</p></div></div>
       <label className="field-label">Nombre del pedido<input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej. Almuerzo ejecutivo" /></label><div className="form-row"><label className="field-label">Producto o concepto<input value={productName} onChange={(e) => setProductName(e.target.value)} placeholder="Ej. Menú del día" /></label><label className="field-label">Valor (COP)<input type="number" min="0" step="100" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="25.000" /></label></div><label className="field-label qty-field">Cantidad<div className="qty-picker"><button onClick={() => setQty(Math.max(1, qty - 1))}>−</button><span>{qty}</span><button onClick={() => setQty(qty + 1)}>+</button></div></label>
       <div className="composer-total"><span>Total del pedido</span><b>{formatCOP(total)}</b></div>
-      <div className="qr-setup"><div className="qr-upload"><input id="qr-upload" type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /><label htmlFor="qr-upload" className="qr-upload-box">{file ? <><BadgeCheck size={19} /><span>{file.name}</span></> : qrUrl ? <><BadgeCheck size={19} /><span>QR cargado</span></> : <><Plus size={19} /><span>Subir QR de pago</span><small>PNG, JPG o WebP · hasta 2 MB</small></>}</label></div><label className="field-label">Titular o llave<input value={beneficiary} onChange={(e) => setBeneficiary(e.target.value)} placeholder="Nombre del titular" /></label><label className="field-label">Etiqueta de pago<input value={qrLabel} onChange={(e) => setQrLabel(e.target.value)} placeholder="Llave Bre-B / Nequi" /></label></div>
+      <div className="wallet-editor-grid">{walletProviders.slice(0, 3).map((wallet) => { const draft = walletDrafts[wallet.id]; const inputId = `qr-upload-${wallet.id}`; return <div className={`wallet-config-card${selectedProvider === wallet.id ? ' selected' : ''}`} key={wallet.id}>
+        <PaymentProviderChoice provider={wallet.id} selected={selectedProvider === wallet.id} onSelect={() => setSelectedProvider(wallet.id)} />
+        <input id={inputId} type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => updateWalletDraft(wallet.id, { file: e.target.files?.[0] ?? null })} />
+        <label htmlFor={inputId} className="qr-upload-box">{draft.file ? <><BadgeCheck size={16} /><span>{draft.file.name}</span></> : draft.qrImageUrl ? <><BadgeCheck size={16} /><span>QR configurado</span></> : <><Plus size={16} /><span>Subir QR {wallet.label}</span><small>PNG, JPG o WebP · hasta 2 MB</small></>}</label>
+        <input className="wallet-text-input" value={draft.beneficiaryName} onChange={(e) => updateWalletDraft(wallet.id, { beneficiaryName: e.target.value })} placeholder="Titular" aria-label={`Titular de ${wallet.label}`} />
+        <input className="wallet-text-input" value={draft.paymentKeyLabel} onChange={(e) => updateWalletDraft(wallet.id, { paymentKeyLabel: e.target.value })} placeholder="Llave o número" aria-label={`Llave o número de ${wallet.label}`} />
+      </div>})}</div>
       <div className="dual-actions"><button className="button button-primary" onClick={createQrOrder} disabled={working}><QrCode size={17} /> Mostrar QR en mostrador</button><button className="button button-whatsapp" onClick={createShareLink} disabled={working}><span className="wa-mark">◉</span> Compartir por WhatsApp</button></div><p className="helper-line"><ShieldCheck size={14} /> Transferencia directa a tu billetera. VeriPago no cobra comisión.</p>
     </section><section className="panel insight-panel"><div className="panel-heading"><span className="panel-heading-icon violet"><Bell size={20} /></span><div><h2>Así funciona tu cobro</h2><p>VeriPago acompaña cada paso.</p></div></div><div className="timeline"><div className="timeline-step done"><span><Check size={14} /></span><div><b>Armas el pedido</b><small>Agrega productos, cantidad y valor.</small></div></div><div className="timeline-step done"><span><QrCode size={14} /></span><div><b>El cliente transfiere</b><small>Escanea tu QR y paga directo a tu cuenta.</small></div></div><div className="timeline-step"><span><Bell size={14} /></span><div><b>VeriPago te avisa</b><small>La app confirma el pago y te lo anuncia.</small></div></div><div className="timeline-step"><span><Truck size={14} /></span><div><b>Entregas con confianza</b><small>Marca el pedido entregado cuando quieras.</small></div></div></div><div className="device-state"><span className="device-symbol"><Smartphone size={20} /></span><span><b>App VeriPago para Android</b><small>Vincula tu celular receptor</small></span><span className="device-offline"><i /> Por configurar</span></div><div className="qr-tip"><ShieldCheck size={18} /><span>VeriPago solo lee las notificaciones de pago. Nunca pedimos tu clave bancaria.</span></div></section></div>}
     {tab === 'pedidos' && <OrderTable orders={filteredOrders} filter={filter} setFilter={setFilter} markDelivered={markDelivered} exportEnabled />}
@@ -336,8 +398,8 @@ function OrderTable({ orders, filter, setFilter, markDelivered, exportEnabled = 
   return <section className="panel orders-panel"><div className="panel-heading"><span className="panel-heading-icon"><PackageCheck size={20} /></span><div><h2>Pedidos y entregas</h2><p>Confirma lo recibido y sigue cada entrega.</p></div><input className="search-input" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Buscar cliente o código" />{exportEnabled && <div className="export-actions"><button className="button button-small button-outline" onClick={exportExcel}><FileDown size={14} /> Excel</button><button className="button button-small button-outline" onClick={exportCsv}><FileDown size={14} /> CSV</button></div>}</div>{orders.length ? <div className="table-wrap"><table><thead><tr><th>Pedido</th><th>Cliente</th><th>Total</th><th>Pago</th><th>Entrega</th><th /></tr></thead><tbody>{orders.map((order) => <tr key={order.id}><td><b>{order.orderCode}</b><small>{order.createdAt ? dateLabel(order.createdAt) : 'Hoy'}</small></td><td>{order.customerName || 'Cliente mostrador'}</td><td><b>{formatCOP(order.totalAmount)}</b></td><td><PaymentPill status={order.paymentStatus} /></td><td>{order.deliveryStatus === 'DELIVERED' ? <span className="delivered-label"><Check size={14} /> Entregado</span> : 'Por entregar'}</td><td>{markDelivered && order.paymentStatus.startsWith('VERIFIED') && order.deliveryStatus !== 'DELIVERED' && <button className="text-action" onClick={() => markDelivered(order.id)}>Marcar entregado <ArrowRight size={14} /></button>}</td></tr>)}</tbody></table></div> : <EmptyState title="Tus pedidos aparecerán aquí" body="Cuando empieces a cobrar, podrás seguir pagos y entregas en tiempo real." action={() => setFilter('')} />}</section>
 }
 
-function QrPaymentModal({ value, onClose }: { value: { url: string; code: string; total: number }; onClose: () => void }) {
-  return <div className="modal-backdrop" onClick={onClose}><div className="qr-modal" onClick={(e) => e.stopPropagation()}><button className="modal-close" onClick={onClose}><X size={19} /></button><div className="eyebrow">COBRO EN MOSTRADOR</div><h2>Escanea y paga</h2><p>Pedido <b>{value.code}</b></p><div className="qr-modal-code">{value.url ? <img src={value.url} alt="Código QR del comercio" /> : <div><QrCode size={80} /><small>Configura tu QR bancario en ajustes</small></div>}</div><div className="qr-modal-total"><span>Total exacto</span><b>{formatCOP(value.total)}</b></div><div className="waiting-banner"><span className="spinner" /> Esperando confirmación del pago</div><button className="button button-outline button-full" onClick={onClose}>Listo</button></div></div>
+function QrPaymentModal({ value, onClose }: { value: { url: string; code: string; total: number; paymentProvider: PaymentProvider; paymentKeyLabel: string }; onClose: () => void }) {
+  return <div className="modal-backdrop" onClick={onClose}><div className="qr-modal" onClick={(e) => e.stopPropagation()}><button className="modal-close" onClick={onClose}><X size={19} /></button><div className="eyebrow">COBRO EN MOSTRADOR</div><h2>Escanea y paga</h2><p>Pedido <b>{value.code}</b></p><div className="qr-modal-code">{value.url ? <img src={value.url} alt={`QR de ${walletProviders.find((item) => item.id === value.paymentProvider)?.label ?? 'pago'}`} /> : <div><QrCode size={80} /><small>Configura un QR bancario en VeriPago Web</small></div>}</div><div className="wallet-modal-method"><PaymentProviderLogo provider={value.paymentProvider} className="wallet-choice-logo" /><b>{walletProviders.find((item) => item.id === value.paymentProvider)?.label}</b>{value.paymentKeyLabel && <span>{value.paymentKeyLabel}</span>}</div><div className="qr-modal-total"><span>Total exacto</span><b>{formatCOP(value.total)}</b></div><div className="waiting-banner"><span className="spinner" /> Esperando confirmación del pago</div><button className="button button-outline button-full" onClick={onClose}>Listo</button></div></div>
 }
 
 function CustomerDashboard({ user }: { user: UserProfile }) {

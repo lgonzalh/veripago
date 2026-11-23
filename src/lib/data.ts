@@ -6,7 +6,7 @@ import {
 import { httpsCallable } from 'firebase/functions'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { auth, db, functions, googleProvider, storage } from './firebase'
-import type { OrderRecord, PaymentLink, Role, UserProfile } from './types'
+import type { OrderRecord, PaymentLink, PaymentProvider, PaymentMethod, Role, UserProfile } from './types'
 
 function requireServices() {
   if (!auth || !db || !functions || !storage) throw new Error('Firebase no está configurado. Copia .env.example a .env.local y agrega las credenciales del proyecto.')
@@ -55,7 +55,15 @@ export async function createPaymentLink(input: Omit<PaymentLink, 'id' | 'merchan
   return (await call(input)).data
 }
 
-export async function updatePaymentLink(input: { id: string; schemaJson: PaymentLink['schemaJson']; qrImageUrl: string; paymentKeyLabel: string; beneficiaryName: string }) {
+export async function updatePaymentLink(input: {
+  id: string
+  schemaJson: PaymentLink['schemaJson']
+  qrImageUrl?: string
+  paymentKeyLabel?: string
+  beneficiaryName?: string
+  paymentProvider?: PaymentProvider
+  paymentMethods?: PaymentMethod[]
+}) {
   const { functions } = requireServices()
   const call = httpsCallable<typeof input, { id: string }>(functions, 'updatePaymentLink')
   return (await call(input)).data
@@ -67,6 +75,7 @@ export async function createCheckout(input: {
   customerName: string
   customerPhone: string
   checkoutChannel?: string
+  paymentProvider?: PaymentProvider
 }) {
   const { functions } = requireServices()
   const call = httpsCallable<typeof input, { orderId: string; sessionId: string; orderCode: string; totalAmount: number }>(functions, 'createCheckoutOrder')
