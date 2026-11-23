@@ -171,4 +171,3 @@ firebase deploy --only hosting,firestore:rules,storage
 ## 👤 Autor
 
 Desarrollado por **Luis Antonio González Hernández**  
-Portafolio: [lantonium.com](https://lantonium.com/)
