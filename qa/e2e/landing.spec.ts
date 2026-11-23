@@ -9,14 +9,13 @@ test('landing page loads from the VeriPago subpath', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Muestra el QR y cobra' })).toBeVisible()
 })
 
-test('login modal offers Google only for merchant and admin access', async ({ page }) => {
+test('Google login is available without an intermediate modal', async ({ page }) => {
   await page.goto('./')
-  await page.getByRole('button', { name: 'Empezar gratis' }).click()
 
-  await expect(page.getByRole('heading', { name: 'Continúa con Google' })).toBeVisible()
+  await expect(page.locator('.login-modal')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /Continuar con Google/ }).first()).toBeVisible()
   await expect(page.getByRole('button', { name: /Quiero comprar/ })).toHaveCount(0)
-  await expect(page.locator('.login-modal .button-full')).toContainText('Continuar con Google')
-  await expect(page.locator('.login-modal input[type="password"]')).toHaveCount(0)
+  await expect(page.locator('input[type="password"]')).toHaveCount(0)
 })
 
 test('unknown checkout links show a recoverable unavailable state', async ({ page }) => {

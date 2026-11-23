@@ -69,8 +69,8 @@ const emptyWalletDraft = (): WalletDraft => ({ qrImageUrl: '', paymentKeyLabel: 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null)
   const [authReady, setAuthReady] = useState(false)
-  const [loginOpen, setLoginOpen] = useState(false)
   const [loginError, setLoginError] = useState('')
+  const [loginBusy, setLoginBusy] = useState(false)
   const [notice, setNotice] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -84,15 +84,19 @@ export default function App() {
   }, [])
 
   const startLogin = async () => {
+    if (loginBusy) return
     setLoginError('')
+    setLoginBusy(true)
     try {
       const profile = await signInWithGoogle()
       setUser(profile)
-      setLoginOpen(false)
       setNotice(`Hola, ${profile.displayName.split(' ')[0]}. Tu espacio está listo.`)
       window.setTimeout(() => setNotice(''), 4000)
     } catch (error) {
       setLoginError(error instanceof Error ? error.message : 'No pudimos iniciar sesión con Google.')
+      window.setTimeout(() => setLoginError(''), 6000)
+    } finally {
+      setLoginBusy(false)
     }
   }
 
@@ -114,23 +118,23 @@ export default function App() {
         {user ? <div className="user-menu">
           <Link className="avatar-link" to={homeForRole(user.role)}><img src={user.photoUrl || brand} alt="" /><span>{user.displayName.split(' ')[0]}</span><ChevronDown size={15} /></Link>
           <button className="icon-button" title="Cerrar sesión" onClick={signOut}><LogOut size={17} /></button>
-        </div> : <button className="button button-small button-light" onClick={() => setLoginOpen(true)}><GoogleMark /> Continuar con Google <ArrowRight size={15} /></button>}
+        </div> : <button className="button button-small button-light" onClick={startLogin} disabled={loginBusy || !isFirebaseConfigured}><GoogleMark /> {loginBusy ? 'Conectando con Google…' : 'Continuar con Google'} <ArrowRight size={15} /></button>}
         <button className="menu-toggle" onClick={() => setMenuOpen(!menuOpen)} aria-label="Abrir menú">{menuOpen ? <X /> : <Menu />}</button>
       </div>
     </header>
 
     {notice && <div className="toast"><Check size={16} />{notice}</div>}
+    {loginError && <div className="toast toast-error" role="alert"><X size={16} />{loginError}</div>}
     {!authReady ? <main className="loading-screen"><span className="spinner" />Cargando tu espacio</main> :
       <Routes>
-        <Route path="/" element={<Landing user={user} onLogin={() => setLoginOpen(true)} />} />
-        <Route path="/comercio/*" element={user?.role === 'COMERCIANTE' ? <MerchantDashboard user={user} /> : <AccessGate user={user} openLogin={() => setLoginOpen(true)} />} />
+        <Route path="/" element={<Landing user={user} onLogin={startLogin} />} />
+        <Route path="/comercio/*" element={user?.role === 'COMERCIANTE' ? <MerchantDashboard user={user} /> : <AccessGate user={user} openLogin={startLogin} />} />
         <Route path="/mi-cuenta/*" element={<Navigate to="/" replace />} />
-        <Route path="/admin/*" element={user?.role === 'ADMINISTRADOR' ? <AdminDashboard user={user} /> : <AccessGate user={user} openLogin={() => setLoginOpen(true)} />} />
+        <Route path="/admin/*" element={user?.role === 'ADMINISTRADOR' ? <AdminDashboard user={user} /> : <AccessGate user={user} openLogin={startLogin} />} />
         <Route path="/:slug" element={<PublicCheckout />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>}
 
-    {loginOpen && <LoginModal error={loginError} onClose={() => setLoginOpen(false)} onContinue={startLogin} />}
     <footer className="site-footer"><Link to="/" className="footer-brand"><img src={brand} alt="" /> VeriPago</Link><span>Pagos directos. Pedidos claros. Cero comisiones.</span><span>© 2026 VeriPago</span></footer>
   </>
 }
@@ -182,14 +186,6 @@ function Landing({ user, onLogin }: { user: UserProfile | null; onLogin: () => v
 
     <section className="closing-cta section-wrap"><div className="closing-icon"><Store size={24} /></div><div><h2>Tu próximo pago puede ser más simple.</h2><p>Empieza hoy. Configura tu primer cobro QR en minutos.</p></div><button className="button button-white" onClick={onLogin}>Crear mi espacio <ArrowRight size={17} /></button></section>
   </main>
-}
-
-function LoginModal({ error, onClose, onContinue }: { error: string; onClose: () => void; onContinue: () => void }) {
-  return <div className="modal-backdrop" onClick={onClose}><div className="login-modal" onClick={(event) => event.stopPropagation()}>
-    <button className="modal-close" onClick={onClose} aria-label="Cerrar"><X size={19} /></button><img className="modal-logo" src={brand} alt="VeriPago" /><div className="eyebrow">ACCESO A VERIPAGO</div><h2>Continúa con Google</h2><p>Inicia sesión o registra tu perfil de comerciante con Google. Las cuentas administradoras autorizadas entran a su panel.</p>
-    {error && <div className="inline-error">{error}</div>}{!isFirebaseConfigured && <div className="inline-note">El inicio de sesión requiere configurar Firebase en <code>.env.local</code>.</div>}
-    <button className="button button-primary button-full" onClick={onContinue} disabled={!isFirebaseConfigured}><GoogleMark /> Continuar con Google</button><small className="privacy-note"><ShieldCheck size={14} /> Los compradores pagan como invitados desde su enlace o QR.</small>
-  </div></div>
 }
 
 function GoogleMark() { return <img src={googleLogo} alt="" aria-hidden="true" className="google-logo" /> }
