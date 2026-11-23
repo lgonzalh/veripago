@@ -1,7 +1,7 @@
 import { signInWithPopup } from 'firebase/auth'
 import {
   collection, doc, getDoc, getDocs, onSnapshot, orderBy, query, serverTimestamp,
-  updateDoc, where, type Unsubscribe,
+  runTransaction, updateDoc, where, type Unsubscribe,
 } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
@@ -14,15 +14,46 @@ function requireServices() {
 }
 
 export async function signInWithGoogle() {
-  const { auth, functions } = requireServices()
-  await signInWithPopup(auth, googleProvider)
-  const provision = httpsCallable<Record<string, never>, { profile: UserProfile }>(functions, 'provisionGoogleProfile')
+  const { auth, db } = requireServices()
+  const credential = await signInWithPopup(auth, googleProvider)
+  const firebaseUser = credential.user
+  const email = firebaseUser.email?.trim()
+  if (!email || !firebaseUser.emailVerified) {
+    await auth.signOut()
+    throw new Error('Inicia sesión con una cuenta de Google verificada.')
+  }
+  const profileRef = doc(db, 'users', firebaseUser.uid)
+  const isBootstrapAdmin = email.toLowerCase() === 'lantonium@gmail.com'
   try {
-    const profile = (await provision({})).data.profile
-    if (profile.role !== 'COMERCIANTE' && profile.role !== 'ADMINISTRADOR') {
-      throw new Error('Esta cuenta no tiene un perfil habilitado en VeriPago.')
-    }
-    return profile
+    return await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(profileRef)
+      if (snapshot.exists()) {
+        const existing = snapshot.data() as UserProfile
+        if (existing.isActive === false) throw new Error('Tu cuenta VeriPago está desactivada.')
+        if (existing.role !== 'COMERCIANTE' && existing.role !== 'ADMINISTRADOR') {
+          throw new Error('Esta cuenta no tiene un perfil habilitado en VeriPago.')
+        }
+        const role = isBootstrapAdmin ? 'ADMINISTRADOR' : existing.role
+        transaction.update(profileRef, {
+          ...(role !== existing.role ? { role } : {}),
+          lastLoginAt: serverTimestamp(),
+        })
+        return { ...existing, role, isActive: true }
+      }
+
+      const profile: UserProfile = {
+        uid: firebaseUser.uid,
+        email,
+        displayName: firebaseUser.displayName?.trim() || 'Comerciante VeriPago',
+        photoUrl: firebaseUser.photoURL || '',
+        role: isBootstrapAdmin ? 'ADMINISTRADOR' : 'COMERCIANTE',
+        isActive: true,
+        quotaMaxLinks: 10,
+        loyaltyPoints: 0,
+      }
+      transaction.set(profileRef, { ...profile, createdAt: serverTimestamp(), lastLoginAt: serverTimestamp() })
+      return profile
+    })
   } catch (error) {
     await auth.signOut()
     throw error
@@ -105,11 +136,11 @@ export async function getApkUrl() {
 }
 
 export async function getApkRelease() {
-  const { db, storage } = requireServices()
+  const { db } = requireServices()
   const release = await getDoc(doc(db, 'platform_settings', 'global'))
-  const fallbackUrl = await getDownloadURL(ref(storage, 'releases/veripago-latest.apk')).catch(() => '')
+  const publishedUrl = release.get('latestApkUrl') as string | undefined
   return {
-    url: release.get('latestApkUrl') as string || fallbackUrl,
+    url: publishedUrl || '',
     version: release.get('latestApkVersion') as string || '',
   }
 }

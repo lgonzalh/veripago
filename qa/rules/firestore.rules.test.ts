@@ -20,6 +20,7 @@ import {
   getDoc,
   getDocs,
   query,
+  serverTimestamp,
   setDoc,
   Timestamp,
 } from 'firebase/firestore'
@@ -65,13 +66,28 @@ describe('Firestore security rules', () => {
     await assertFails(getDocs(collection(guest, 'public_payment_links')))
   })
 
-  it('prevents clients from creating or assigning merchant, buyer, or admin profiles', async () => {
-    const db = googleUser('new-merchant')
-    await assertFails(setDoc(doc(db, 'users', 'new-merchant'), user('new-merchant', 'COMERCIANTE')))
+  it('allows first sign-in to create a merchant profile and restricts admin bootstrap to the allowlisted email', async () => {
+    const merchantDb = googleUser('new-merchant', 'merchant@example.test')
+    await assertSucceeds(setDoc(
+      doc(merchantDb, 'users', 'new-merchant'),
+      newProfile('new-merchant', 'merchant@example.test', 'COMERCIANTE'),
+    ))
 
-    const anotherDb = googleUser('self-admin')
-    await assertFails(setDoc(doc(anotherDb, 'users', 'self-admin'), user('self-admin', 'ADMINISTRADOR')))
-    await assertFails(setDoc(doc(db, 'users', 'someone-else'), user('someone-else', 'USUARIO')))
+    const adminDb = googleUser('bootstrap-admin', 'lantonium@gmail.com')
+    await assertSucceeds(setDoc(
+      doc(adminDb, 'users', 'bootstrap-admin'),
+      newProfile('bootstrap-admin', 'lantonium@gmail.com', 'ADMINISTRADOR'),
+    ))
+
+    const impostorDb = googleUser('self-admin', 'impostor@example.test')
+    await assertFails(setDoc(
+      doc(impostorDb, 'users', 'self-admin'),
+      newProfile('self-admin', 'impostor@example.test', 'ADMINISTRADOR'),
+    ))
+    await assertFails(setDoc(
+      doc(merchantDb, 'users', 'someone-else'),
+      newProfile('someone-else', 'merchant@example.test', 'COMERCIANTE'),
+    ))
   })
 
   it('allows merchants to create their own pending orders only', async () => {
@@ -180,10 +196,27 @@ describe('Firestore security rules', () => {
   })
 })
 
-function googleUser(uid: string) {
+function googleUser(uid: string, email = `${uid}@example.test`) {
   return testEnv.authenticatedContext(uid, {
+    email,
+    email_verified: true,
     firebase: { sign_in_provider: 'google.com' },
   }).firestore()
+}
+
+function newProfile(uid: string, email: string, role: 'COMERCIANTE' | 'ADMINISTRADOR') {
+  return {
+    uid,
+    email,
+    displayName: uid,
+    photoUrl: '',
+    role,
+    isActive: true,
+    quotaMaxLinks: 10,
+    loyaltyPoints: 0,
+    createdAt: serverTimestamp(),
+    lastLoginAt: serverTimestamp(),
+  }
 }
 
 function user(uid: string, role: 'COMERCIANTE' | 'USUARIO' | 'ADMINISTRADOR') {

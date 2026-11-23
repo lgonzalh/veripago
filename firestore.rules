@@ -21,12 +21,37 @@ service cloud.firestore {
     match /users/{uid} {
       allow get: if signedInWithGoogle() && (request.auth.uid == uid || isAdmin());
       allow list: if isAdmin();
-      // Trusted profile provisioning assigns merchants and the allowlisted platform admin.
-      allow create: if false;
+      // A verified Google account may create its own profile. The admin role is limited to the
+      // explicit bootstrap email; all other first-time users become merchants.
+      allow create: if signedInWithGoogle()
+        && request.auth.uid == uid
+        && request.auth.token.email_verified == true
+        && request.resource.data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'photoUrl', 'role', 'isActive',
+          'quotaMaxLinks', 'loyaltyPoints', 'createdAt', 'lastLoginAt'
+        ])
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.displayName is string
+        && request.resource.data.photoUrl is string
+        && request.resource.data.isActive == true
+        && request.resource.data.quotaMaxLinks == 10
+        && request.resource.data.loyaltyPoints == 0
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.lastLoginAt == request.time
+        && ((request.auth.token.email == 'lantonium@gmail.com'
+              && request.resource.data.role == 'ADMINISTRADOR')
+          || (request.auth.token.email != 'lantonium@gmail.com'
+              && request.resource.data.role == 'COMERCIANTE'));
       allow update: if isAdmin()
         || (signedInWithGoogle() && request.auth.uid == uid
           && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['displayName', 'photoUrl', 'lastLoginAt']));
+            .hasOnly(['displayName', 'photoUrl', 'lastLoginAt']))
+        || (signedInWithGoogle() && request.auth.uid == uid
+          && request.auth.token.email == 'lantonium@gmail.com'
+          && request.resource.data.role == 'ADMINISTRADOR'
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['role', 'lastLoginAt']));
       allow delete: if isAdmin();
     }
 
