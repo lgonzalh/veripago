@@ -31,6 +31,17 @@ Requiere JDK 17 y Android SDK 35. Define `sdk.dir` en `local.properties` y confi
 
 El APK de depuración se genera en `app/build/outputs/apk/debug/app-debug.apk`.
 
+## Pruebas de QA
+
+```powershell
+pnpm test
+pnpm test:rules
+pnpm test:e2e
+.\gradlew.bat testDebugUnitTest connectedDebugAndroidTest
+```
+
+`test:rules` requiere Firebase CLI y JDK 21 para los emuladores locales de Firestore y Storage. `test:e2e` ejecuta Playwright con Microsoft Edge instalado; para otra instalación Chromium define `PLAYWRIGHT_CHROMIUM_EXECUTABLE`. Las pruebas de Android instrumentadas requieren un dispositivo conectado o emulador.
+
 La aplicación local abre en `http://localhost:5173/VeriPago/`. El build se genera en `dist/VeriPago/` con los recursos apuntando a `/VeriPago/`.
 
 ## Cloud Functions

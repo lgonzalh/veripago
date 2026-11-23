@@ -51,7 +51,7 @@ Append-only server records: `actorUid`, `actorRole`, `action`, `entityType`, `en
 
 ## Reconciliation protocol
 
-1. Persist each captured notification in Room with a SHA-256 idempotency key before any side effect. The key should include package, normalized amount, and a stable notification time bucket; do not use a coarse bucket that can collapse legitimate same-value transfers.
+1. Persist each captured notification in Room with a SHA-256 idempotency key before any side effect. The key includes package, normalized amount, notification `postTime` at millisecond precision, and normalized sender. A repeated callback for the same Android notification retains its key; distinct callbacks are not merged into a broad time window.
 2. In one Room transaction, select pending orders for the same merchant and amount within their reconciliation window. Rank sender-name similarity first, then oldest order; if there is no plausible sender match, use oldest eligible order. Mark exactly one order and notification as matched and append outbox operations atomically.
 3. When connected, upload via an idempotent server transaction: verify the notification key is unused, verify the selected order is still pending and owned by the merchant, then atomically set its status and matched notification. If another device won the race, preserve the notification as unmatched for manual review.
 4. Firestore snapshot listeners feed remote orders and rule updates into Room using upserts. Local writes update Room immediately and are retried from the outbox by WorkManager. Never mark delivery as paid; payment and delivery states remain independent.

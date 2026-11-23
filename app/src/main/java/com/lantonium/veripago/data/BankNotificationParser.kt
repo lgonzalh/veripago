@@ -38,8 +38,10 @@ object BankNotificationParser {
     }
 
     fun idempotencyHash(sourcePackage: String, amount: Long, receivedAt: Long, sender: String): String {
-        val timeBucket = receivedAt / 30_000L
-        val stable = "$sourcePackage|$amount|$timeBucket|${normalizeName(sender)}"
+        // NotificationListenerService may report the same notification more than once with
+        // the same postTime. Preserve millisecond precision so separate same-value transfers
+        // in a broad time window do not collapse into one idempotency key.
+        val stable = "$sourcePackage|$amount|$receivedAt|${normalizeName(sender)}"
         return MessageDigest.getInstance("SHA-256").digest(stable.toByteArray())
             .joinToString("") { "%02x".format(it.toInt() and 0xff) }
     }
