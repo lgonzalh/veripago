@@ -1,0 +1,11 @@
+@font-face {
+  font-family: 'Ford Antenna';
+  src: url('../assets/Ford Antenna Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  font-family: 'Ford Antenna', Inter, ui-sans-serif, system-ui, sans-serif;
+}
