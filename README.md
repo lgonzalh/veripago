@@ -1,5 +1,7 @@
 # VeriPago — v1.0 alfa
 
+Firebase setup and remaining console steps are documented in [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md).
+
 VeriPago organiza cobros QR, pedidos y confirmaciones para Nequi, Daviplata y Bre-B. El dinero se transfiere directamente al comercio. La aplicación web funciona bajo `/VeriPago/` y adapta las herramientas al perfil autenticado con Google.
 
 ## Estado del producto

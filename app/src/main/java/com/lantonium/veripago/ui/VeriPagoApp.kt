@@ -284,13 +284,12 @@ private fun LandingScreen(modifier: Modifier, configured: Boolean, onLogin: (Str
             FeatureLine(Icons.Default.CheckCircle, "Entrega con el pago verificado")
         }
         Column(Modifier.fillMaxWidth().background(Color.White).padding(22.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-            Button(onClick = { onLogin("COMERCIANTE") }, enabled = configured, modifier = Modifier.fillMaxWidth().height(49.dp), shape = RoundedCornerShape(12.dp)) {
-                Text("Continuar como comerciante", fontWeight = FontWeight.SemiBold)
+            Button(onClick = { onLogin("COMERCIANTE") }, modifier = Modifier.fillMaxWidth().height(51.dp), shape = RoundedCornerShape(12.dp)) {
+                Image(painterResource(R.drawable.google_logo), contentDescription = null, modifier = Modifier.size(19.dp))
+                Spacer(Modifier.width(9.dp))
+                Text("Continuar con Google", fontWeight = FontWeight.SemiBold)
             }
-            OutlinedButton(onClick = { onLogin("USUARIO") }, enabled = configured, modifier = Modifier.fillMaxWidth().height(47.dp), shape = RoundedCornerShape(12.dp)) {
-                Text("Continuar como cliente")
-            }
-            if (!configured) Text("Para iniciar sesión, configura Firebase y webClientId en local.properties.", color = Muted, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            if (!configured) Text("Google aún no está conectado a Firebase en este APK. Elige tu perfil y la app te mostrará lo que falta configurar.", color = Muted, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.CloudOff, null, tint = Green, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(5.dp)); Text("Tus pedidos se conservan sin conexión", color = Muted, fontSize = 10.sp) }
         }
     }
@@ -320,6 +319,7 @@ private fun LoginDialog(role: String, error: String, configured: Boolean, onRole
                 Text("Elige tu perfil para configurar tu cuenta.", color = Muted, fontSize = 12.sp)
                 RoleChoice("COMERCIANTE", "Tengo un negocio", role, onRoleChange)
                 RoleChoice("USUARIO", "Quiero comprar", role, onRoleChange)
+                if (!configured) Text("Falta habilitar Google en Firebase y agregar el Web client ID en local.properties.", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 7.dp))
                 if (error.isNotBlank()) Text(error, color = Color(0xFFB44743), fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
             }
         },

@@ -9,7 +9,7 @@ test('landing page loads from the VeriPago subpath', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Muestra el QR y cobra' })).toBeVisible()
 })
 
-test('login modal lets the visitor choose a profile and explains missing Firebase config', async ({ page }) => {
+test('login modal offers Google as the only sign-in method after profile selection', async ({ page }) => {
   await page.goto('./')
   await page.getByRole('button', { name: 'Empezar gratis' }).click()
 
@@ -17,8 +17,8 @@ test('login modal lets the visitor choose a profile and explains missing Firebas
   const buyerChoice = page.getByRole('button', { name: /Quiero comprar/ })
   await buyerChoice.click()
   await expect(buyerChoice).toHaveClass(/selected/)
-  await expect(page.getByText('El inicio de sesión requiere configurar Firebase')).toBeVisible()
-  await expect(page.locator('.login-modal .button-full')).toBeDisabled()
+  await expect(page.locator('.login-modal .button-full')).toContainText('Continuar con Google')
+  await expect(page.locator('.login-modal input[type="password"]')).toHaveCount(0)
 })
 
 test('unknown checkout links show a recoverable unavailable state', async ({ page }) => {
