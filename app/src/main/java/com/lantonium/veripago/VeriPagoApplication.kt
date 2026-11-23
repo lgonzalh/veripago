@@ -25,6 +25,8 @@ object AppGraph {
 
     fun initialize(application: Application) {
         database = VeriPagoDatabase.get(application)
+        // Open the on-device store at startup so Room/schema failures surface before first use.
+        database.openHelper.writableDatabase
         payments = PaymentProcessor(database)
         profileCache = ProfileCache(application)
     }
