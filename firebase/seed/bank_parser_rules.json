@@ -1,0 +1,32 @@
+[
+  {
+    "ruleId": "nequi-transfer-v1",
+    "walletName": "Nequi",
+    "androidPackage": "com.nequi.MobileApp",
+    "amountRegex": "(?i)(?:te\\s+)?(?:lleg[oó]|recibiste|recib[ií])\\s*\\$?\\s*([0-9][0-9.,]*)\\s*(?:COP|pesos)?",
+    "senderRegex": "(?i)(?:de|enviado\\s+por|remitente)\\s*[:\\-]?\\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑa-záéíóúñ ]{2,60})",
+    "isActive": false,
+    "updatedAt": null,
+    "note": "Plantilla inicial: validar con notificaciones reales anonimizadas antes de activar."
+  },
+  {
+    "ruleId": "daviplata-transfer-v1",
+    "walletName": "Daviplata",
+    "androidPackage": "com.davivienda.daviplataapp",
+    "amountRegex": "(?i)(?:abono|recibiste|transferencia\\s+recibida).*?\\$?\\s*([0-9][0-9.,]*)\\s*(?:COP|pesos)?",
+    "senderRegex": "(?i)(?:de|remitente|origen)\\s*[:\\-]?\\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑa-záéíóúñ ]{2,60})",
+    "isActive": false,
+    "updatedAt": null,
+    "note": "Plantilla inicial: validar con notificaciones reales anonimizadas antes de activar."
+  },
+  {
+    "ruleId": "breb-credit-v1",
+    "walletName": "Bre-B",
+    "androidPackage": "",
+    "amountRegex": "(?i)(?:transferencia|recibiste|abono).*?\\$?\\s*([0-9][0-9.,]*)\\s*(?:COP|pesos)?",
+    "senderRegex": "(?i)(?:de|desde|remitente)\\s*[:\\-]?\\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑa-záéíóúñ ]{2,60})",
+    "isActive": false,
+    "updatedAt": null,
+    "note": "Bre-B depende de la app bancaria emisora; crear una regla por paquete verificado."
+  }
+]

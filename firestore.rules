@@ -1,0 +1,122 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedInWithGoogle() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+
+    function userDoc(uid) {
+      return get(/databases/$(database)/documents/users/$(uid));
+    }
+
+    function hasRole(role) {
+      return signedInWithGoogle()
+        && userDoc(request.auth.uid).data.role == role
+        && userDoc(request.auth.uid).data.isActive == true;
+    }
+
+    function isAdmin() { return hasRole('ADMINISTRADOR'); }
+    function isMerchant(uid) { return hasRole('COMERCIANTE') && request.auth.uid == uid; }
+    function validRole(role) { return role in ['COMERCIANTE', 'USUARIO', 'ADMINISTRADOR']; }
+
+    match /users/{uid} {
+      allow get: if signedInWithGoogle() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if signedInWithGoogle()
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.role in ['COMERCIANTE', 'USUARIO']
+        && request.resource.data.isActive == true
+        && request.resource.data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'photoUrl', 'role', 'isActive',
+          'quotaMaxLinks', 'loyaltyPoints', 'createdAt', 'lastLoginAt'
+        ]);
+      allow update: if isAdmin()
+        || (signedInWithGoogle() && request.auth.uid == uid
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['displayName', 'photoUrl', 'lastLoginAt']));
+      allow delete: if isAdmin();
+    }
+
+    match /payment_links/{linkId} {
+      allow get, list: if (resource.data.isActive == true)
+        || (signedInWithGoogle() && request.auth.uid == resource.data.merchantId)
+        || isAdmin();
+      allow create: if signedInWithGoogle()
+        && request.resource.data.merchantId == request.auth.uid
+        && isMerchant(request.auth.uid)
+        && request.resource.data.isActive is bool;
+      allow update, delete: if signedInWithGoogle()
+        && (isMerchant(resource.data.merchantId) || isAdmin());
+    }
+
+    match /orders/{orderId} {
+      allow get, list: if isAdmin()
+        || (signedInWithGoogle() && (
+          request.auth.uid == resource.data.merchantId
+          || request.auth.uid == resource.data.customerUid
+        ));
+      allow create: if signedInWithGoogle()
+        && isMerchant(request.resource.data.merchantId)
+        && request.resource.data.paymentStatus == 'PENDING'
+        && request.resource.data.deliveryStatus == 'PENDING_DELIVERY'
+        && request.resource.data.totalAmount is number;
+      allow update: if isAdmin()
+        || (signedInWithGoogle() && isMerchant(resource.data.merchantId)
+          && request.resource.data.merchantId == resource.data.merchantId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'senderAccountName', 'paymentStatus', 'deliveryStatus',
+            'matchedNotificationId', 'localUpdatedAt', 'serverUpdatedAt'
+          ]));
+      allow delete: if isAdmin();
+    }
+
+    match /checkout_sessions/{sessionId} {
+      // The random session ID is a bearer capability. Store only safe status fields here;
+      // personal data and order items belong in the private orders collection.
+      allow get: if true;
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    match /payment_notifications/{notifId} {
+      allow get, list: if isAdmin()
+        || (signedInWithGoogle() && request.auth.uid == resource.data.merchantId);
+      allow create, update: if signedInWithGoogle()
+        && isMerchant(request.resource.data.merchantId);
+      allow delete: if isAdmin();
+    }
+
+    match /bank_parser_rules/{ruleId} {
+      allow read: if signedInWithGoogle();
+      allow write: if isAdmin();
+    }
+
+    match /linked_devices/{deviceId} {
+      allow get, list: if isAdmin()
+        || (signedInWithGoogle() && request.auth.uid == resource.data.merchantId);
+      allow create, update: if signedInWithGoogle()
+        && request.resource.data.merchantId == request.auth.uid
+        && isMerchant(request.auth.uid);
+      allow delete: if isAdmin()
+        || (signedInWithGoogle() && request.auth.uid == resource.data.merchantId);
+    }
+
+    match /platform_settings/{settingId} {
+      allow read: if signedInWithGoogle();
+      allow write: if isAdmin();
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if resource.data.isPublished == true || signedInWithGoogle();
+      allow write: if isAdmin();
+    }
+
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      // Immutable from clients, including administrators. Trusted server code may append.
+      allow write: if false;
+    }
+  }
+}
