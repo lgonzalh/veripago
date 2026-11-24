@@ -18,6 +18,29 @@ service cloud.firestore {
 
     function isAdmin() { return hasRole('ADMINISTRADOR'); }
     function isMerchant(uid) { return hasRole('COMERCIANTE') && request.auth.uid == uid; }
+    function validMerchantProduct(data) {
+      return data.keys().hasOnly([
+          'name', 'enteredPrice', 'vatRate', 'priceIncludesVat',
+          'priceWithoutVat', 'vatAmount', 'priceWithVat'
+        ])
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 100
+        && data.enteredPrice is int
+        && data.enteredPrice > 0
+        && data.vatRate is number
+        && data.vatRate >= 0
+        && data.vatRate <= 100
+        && data.priceIncludesVat is bool
+        && data.priceWithoutVat is int
+        && data.priceWithoutVat > 0
+        && data.vatAmount is int
+        && data.vatAmount >= 0
+        && data.priceWithVat is int
+        && data.priceWithVat == data.priceWithoutVat + data.vatAmount
+        && ((data.priceIncludesVat && data.enteredPrice == data.priceWithVat)
+          || (!data.priceIncludesVat && data.enteredPrice == data.priceWithoutVat));
+    }
     match /users/{uid} {
       allow get: if signedInWithGoogle() && (request.auth.uid == uid || isAdmin());
       allow list: if isAdmin();
@@ -65,6 +88,13 @@ service cloud.firestore {
           && request.resource.data.whatsappNumber.size() <= 16
           && request.resource.data.updatedAt == request.time;
         allow delete: if settingId == 'contact' && isMerchant(uid);
+      }
+
+      match /products/{productId} {
+        // Catalogs are private: only the authenticated merchant who owns this user path can read or change them.
+        allow get, list: if isMerchant(uid);
+        allow create, update: if isMerchant(uid) && validMerchantProduct(request.resource.data);
+        allow delete: if isMerchant(uid);
       }
     }
 

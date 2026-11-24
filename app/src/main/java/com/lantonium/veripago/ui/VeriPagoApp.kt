@@ -47,6 +47,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
@@ -119,6 +120,8 @@ import com.lantonium.veripago.data.AdminOrderItem
 import com.lantonium.veripago.data.AdminRule
 import com.lantonium.veripago.data.PlatformRelease
 import com.lantonium.veripago.data.OrderEntity
+import com.lantonium.veripago.data.MerchantProduct
+import com.lantonium.veripago.data.MerchantProductRepository
 import com.lantonium.veripago.data.PendingSyncScheduler
 import com.lantonium.veripago.data.UserProfile
 import com.lantonium.veripago.data.BankNotificationParser
@@ -132,6 +135,7 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import java.text.NumberFormat
+import kotlin.math.roundToLong
 
 private val Navy = Color(0xFF0C2442)
 private val Muted = Color(0xFF758398)
@@ -149,6 +153,36 @@ private data class ChargeDraftLine(
     val name: String = "",
     val unitPriceText: String = "",
     val quantityText: String = "1",
+    val catalogProductId: String? = null,
+)
+
+private data class ProductPriceBreakdown(val beforeVat: Long, val vatAmount: Long, val withVat: Long)
+
+private fun parseVatRate(raw: String): Double? {
+    if (raw.isBlank()) return 0.0
+    return raw.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it in 0.0..100.0 }
+}
+
+private fun calculateProductPricing(enteredPrice: Long, vatRate: Double, includesVat: Boolean): ProductPriceBreakdown {
+    if (enteredPrice <= 0 || vatRate <= 0.0) return ProductPriceBreakdown(enteredPrice, 0, enteredPrice)
+    return if (includesVat) {
+        val beforeVat = (enteredPrice / (1.0 + vatRate / 100.0)).roundToLong()
+        ProductPriceBreakdown(beforeVat, enteredPrice - beforeVat, enteredPrice)
+    } else {
+        val vat = (enteredPrice * vatRate / 100.0).roundToLong()
+        ProductPriceBreakdown(enteredPrice, vat, enteredPrice + vat)
+    }
+}
+
+private fun demoMerchantProduct() = MerchantProduct(
+    id = "demo-product-1",
+    name = "Producto de prueba",
+    enteredPrice = 11900,
+    vatRate = 19.0,
+    priceIncludesVat = true,
+    priceWithoutVat = 10000,
+    vatAmount = 1900,
+    priceWithVat = 11900,
 )
 
 private const val DEMO_MERCHANT_UID = "demo-paula-local"
@@ -633,6 +667,15 @@ private fun ProfileScreen(profile: UserProfile) {
 private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, onDemoOrdersChange: (List<OrderEntity>) -> Unit, onError: (String) -> Unit) {
     val isDemo = isDemoMerchant(profile)
     var chargeLines by remember(profile.uid) { mutableStateOf(listOf(ChargeDraftLine())) }
+    var catalogProducts by remember(profile.uid) { mutableStateOf(emptyList<MerchantProduct>()) }
+    var catalogName by rememberSaveable(profile.uid) { mutableStateOf("") }
+    var catalogPrice by rememberSaveable(profile.uid) { mutableStateOf("") }
+    var catalogVatRate by rememberSaveable(profile.uid) { mutableStateOf("") }
+    var catalogPriceIncludesVat by rememberSaveable(profile.uid) { mutableStateOf(false) }
+    var editingProductId by rememberSaveable(profile.uid) { mutableStateOf("") }
+    var savingProduct by remember { mutableStateOf(false) }
+    var catalogMessage by remember { mutableStateOf("") }
+    var productMenuLineId by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var qrState by remember { mutableStateOf<Triple<AndroidPaymentMethod, String, Long>?>(null) }
     var demoSharePreview by remember { mutableStateOf<String?>(null) }
@@ -646,6 +689,7 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
     var latestOrders by remember { mutableStateOf<List<OrderEntity>>(emptyList()) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val productRepository = remember { MerchantProductRepository() }
     val installedWalletApps = remember(profile.uid) { detectInstalledWalletApps(context) }
     val amount = chargeLines.sumOf { line ->
         (line.unitPriceText.toLongOrNull() ?: 0L) * (line.quantityText.toIntOrNull()?.coerceIn(1, 100) ?: 1)
@@ -653,6 +697,9 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
     val chargeIsValid = chargeLines.isNotEmpty() && chargeLines.size <= 50 && chargeLines.all { line ->
         line.name.isNotBlank() && (line.unitPriceText.toLongOrNull() ?: 0L) > 0L && (line.quantityText.toIntOrNull() ?: 0) in 1..100
     }
+    val catalogEnteredPrice = catalogPrice.toLongOrNull() ?: 0L
+    val catalogVat = parseVatRate(catalogVatRate)
+    val catalogPricing = calculateProductPricing(catalogEnteredPrice, catalogVat ?: 0.0, catalogPriceIncludesVat)
     fun updateChargeLine(id: String, update: (ChargeDraftLine) -> ChargeDraftLine) {
         chargeLines = chargeLines.map { if (it.id == id) update(it) else it }
     }
@@ -675,12 +722,14 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
             configuredPaymentMethods = listOf("NEQUI", "DAVIPLATA", "BRE_B").map { provider ->
                 AndroidPaymentMethod(provider, "", "Cuenta de prueba", "Paula Correa")
             }
+            catalogProducts = listOf(demoMerchantProduct())
             return@LaunchedEffect
         }
         val sync = AppGraph.syncManager()
         sync.start(profile.uid)
         runCatching {
             val firestore = FirebaseClients.firestore ?: return@runCatching
+            catalogProducts = productRepository.load(profile.uid)
             merchantWhatsapp = firestore.collection("users").document(profile.uid)
                 .collection("settings").document("contact").get().await().getString("whatsappNumber").orEmpty()
             val link = firestore.collection("payment_links").whereEqualTo("merchantId", profile.uid)
@@ -723,11 +772,30 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
                     chargeLines.forEachIndexed { index, line ->
                         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp)).background(Color(0xFFF7F9FC)).padding(9.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                OutlinedTextField(line.name, { value -> updateChargeLine(line.id) { it.copy(name = value.take(100)) } }, label = { Text("Producto ${index + 1}") }, singleLine = true, modifier = Modifier.weight(1f))
+                                OutlinedTextField(line.name, { value -> updateChargeLine(line.id) { it.copy(name = value.take(100), catalogProductId = null) } }, label = { Text("Producto ${index + 1}") }, singleLine = true, modifier = Modifier.weight(1f))
                                 if (chargeLines.size > 1) TextButton(onClick = { chargeLines = chargeLines.filterNot { it.id == line.id } }) { Text("Quitar", fontSize = 9.sp) }
                             }
+                            Box {
+                                TextButton(enabled = catalogProducts.isNotEmpty(), onClick = { productMenuLineId = line.id }) {
+                                    Text(if (line.catalogProductId == null) "Elegir del catálogo" else "Cambiar producto", fontSize = 9.sp)
+                                }
+                                DropdownMenu(expanded = productMenuLineId == line.id, onDismissRequest = { productMenuLineId = "" }) {
+                                    catalogProducts.forEach { product ->
+                                        DropdownMenuItem(
+                                            text = { Column {
+                                                Text(product.name, color = Navy, fontSize = 12.sp)
+                                                Text("${formatCop(product.priceWithVat)} con IVA · IVA ${formatCop(product.vatAmount)}", color = Muted, fontSize = 9.sp)
+                                            } },
+                                            onClick = {
+                                                updateChargeLine(line.id) { it.copy(name = product.name, unitPriceText = product.priceWithVat.toString(), catalogProductId = product.id) }
+                                                productMenuLineId = ""
+                                            },
+                                        )
+                                    }
+                                }
+                            }
                             Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                                OutlinedTextField(line.unitPriceText, { value -> updateChargeLine(line.id) { it.copy(unitPriceText = value.filter(Char::isDigit).take(10)) } }, label = { Text("Precio unitario (COP)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.weight(1f))
+                                OutlinedTextField(line.unitPriceText, { value -> updateChargeLine(line.id) { it.copy(unitPriceText = value.filter(Char::isDigit).take(10), catalogProductId = null) } }, label = { Text("Precio unitario (COP)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.weight(1f))
                                 OutlinedTextField(line.quantityText, { value -> updateChargeLine(line.id) { it.copy(quantityText = value.filter(Char::isDigit).take(3)) } }, label = { Text("Cantidad") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.width(100.dp))
                             }
                             val lineTotal = (line.unitPriceText.toLongOrNull() ?: 0L) * (line.quantityText.toIntOrNull()?.coerceIn(1, 100) ?: 1)
@@ -859,6 +927,87 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
                         modifier = Modifier.fillMaxWidth().height(45.dp), shape = RoundedCornerShape(11.dp),
                     ) { Icon(Icons.Default.Link, null); Spacer(Modifier.width(7.dp)); Text("Compartir por WhatsApp") }
                     Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.CheckCircle, null, tint = Green, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(6.dp)); Text("Tu dinero llega directo a tu billetera. 0% comisión.", color = Muted, fontSize = 9.sp) }
+                }
+            }
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Text("Catálogo de productos", color = Navy, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text("Privado de tu comercio. El pedido usa el precio final con IVA cuando aplique.", color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
+                    OutlinedTextField(catalogName, { catalogName = it.take(100) }, label = { Text("Nombre del producto") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(catalogPrice, { catalogPrice = it.filter(Char::isDigit).take(10) }, label = { Text("Precio ingresado (COP)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(catalogVatRate, { catalogVatRate = it.filter { char -> char.isDigit() || char == '.' || char == ',' }.take(6) }, label = { Text("IVA (%) · opcional") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = catalogPriceIncludesVat, onCheckedChange = { catalogPriceIncludesVat = it })
+                        Text("El precio ingresado ya incluye IVA", color = Navy, fontSize = 10.sp)
+                    }
+                    Text("Sin IVA: ${formatCop(catalogPricing.beforeVat)}   ·   IVA: ${formatCop(catalogPricing.vatAmount)}   ·   Con IVA: ${formatCop(catalogPricing.withVat)}", color = Navy, fontSize = 9.sp, lineHeight = 14.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            enabled = !savingProduct && catalogName.isNotBlank() && catalogEnteredPrice > 0 && catalogVat != null,
+                            onClick = {
+                                scope.launch {
+                                    savingProduct = true; catalogMessage = ""
+                                    runCatching {
+                                        val rate = catalogVat ?: error("El IVA debe ser un porcentaje entre 0 y 100.")
+                                        val priceBreakdown = calculateProductPricing(catalogEnteredPrice, rate, catalogPriceIncludesVat)
+                                        val draft = MerchantProduct(
+                                            id = editingProductId,
+                                            name = catalogName.trim(),
+                                            enteredPrice = catalogEnteredPrice,
+                                            vatRate = rate,
+                                            priceIncludesVat = catalogPriceIncludesVat,
+                                            priceWithoutVat = priceBreakdown.beforeVat,
+                                            vatAmount = priceBreakdown.vatAmount,
+                                            priceWithVat = priceBreakdown.withVat,
+                                        )
+                                        if (isDemo) {
+                                            val saved = draft.copy(id = draft.id.ifBlank { "demo-${java.util.UUID.randomUUID()}" })
+                                            catalogProducts = (catalogProducts.filterNot { it.id == saved.id } + saved).sortedBy { it.name.lowercase() }
+                                        } else {
+                                            productRepository.save(profile.uid, draft)
+                                            catalogProducts = productRepository.load(profile.uid)
+                                        }
+                                    }.onSuccess {
+                                        catalogName = ""; catalogPrice = ""; catalogVatRate = ""; catalogPriceIncludesVat = false; editingProductId = ""
+                                        catalogMessage = "Producto guardado. Solo tú puedes ver este catálogo."
+                                    }.onFailure { catalogMessage = it.localizedMessage ?: "No se pudo guardar el producto." }
+                                    savingProduct = false
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) { Text(if (savingProduct) "Guardando…" else if (editingProductId.isBlank()) "Agregar producto" else "Guardar cambios", fontSize = 10.sp) }
+                        if (editingProductId.isNotBlank()) TextButton(onClick = { editingProductId = ""; catalogName = ""; catalogPrice = ""; catalogVatRate = ""; catalogPriceIncludesVat = false }) { Text("Cancelar") }
+                    }
+                    if (catalogMessage.isNotBlank()) Text(catalogMessage, color = if (catalogMessage.startsWith("No se pudo") || catalogMessage.startsWith("El IVA")) Color(0xFFB54743) else Green, fontSize = 9.sp)
+                    if (isDemo) Text("Modo de demostración: los productos solo viven en esta sesión.", color = Color(0xFFB54743), fontSize = 9.sp)
+                    if (catalogProducts.isEmpty()) Text("Aún no agregas productos.", color = Muted, fontSize = 10.sp)
+                    catalogProducts.forEach { product ->
+                        Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F9FC)), shape = RoundedCornerShape(11.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(product.name, color = Navy, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text("IVA ${product.vatRate}% · Sin IVA ${formatCop(product.priceWithoutVat)} · IVA ${formatCop(product.vatAmount)} · Total ${formatCop(product.priceWithVat)}", color = Muted, fontSize = 9.sp)
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    TextButton(onClick = {
+                                        editingProductId = product.id; catalogName = product.name; catalogPrice = product.enteredPrice.toString()
+                                        catalogVatRate = if (product.vatRate == 0.0) "" else product.vatRate.toString()
+                                        catalogPriceIncludesVat = product.priceIncludesVat
+                                    }) { Text("Editar", fontSize = 9.sp) }
+                                    TextButton(enabled = !savingProduct, onClick = {
+                                        scope.launch {
+                                            savingProduct = true
+                                            runCatching {
+                                                if (isDemo) catalogProducts = catalogProducts.filterNot { it.id == product.id }
+                                                else { productRepository.delete(profile.uid, product.id); catalogProducts = productRepository.load(profile.uid) }
+                                            }.onFailure { catalogMessage = it.localizedMessage ?: "No se pudo eliminar el producto." }
+                                            savingProduct = false
+                                        }
+                                    }) { Text("Eliminar", color = Color(0xFFB54743), fontSize = 9.sp) }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
