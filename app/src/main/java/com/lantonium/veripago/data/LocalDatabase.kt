@@ -72,6 +72,39 @@ data class PendingSyncEntity(
     val attempts: Int = 0,
 )
 
+@Entity(tableName = "merchant_products", primaryKeys = ["merchantId", "productId"])
+data class MerchantProductEntity(
+    val merchantId: String,
+    val productId: String,
+    val name: String,
+    val enteredPrice: Long,
+    val vatRate: Double,
+    val priceIncludesVat: Boolean,
+    val priceWithoutVat: Long,
+    val vatAmount: Long,
+    val priceWithVat: Long,
+    val updatedAt: Long,
+)
+
+@Entity(tableName = "merchant_settings", primaryKeys = ["merchantId", "settingId"])
+data class MerchantSettingEntity(
+    val merchantId: String,
+    val settingId: String,
+    val payloadJson: String,
+    val updatedAt: Long,
+)
+
+@Entity(tableName = "merchant_qrs", primaryKeys = ["merchantId", "provider"])
+data class MerchantQrEntity(
+    val merchantId: String,
+    val provider: String,
+    val contentType: String,
+    val imageBase64: String,
+    val paymentKeyLabel: String,
+    val beneficiaryName: String,
+    val updatedAt: Long,
+)
+
 @Dao
 interface OrderDao {
     @Query("SELECT * FROM orders WHERE merchantId = :merchantId ORDER BY createdAt DESC")
@@ -142,11 +175,66 @@ interface PendingSyncDao {
 
     @Query("SELECT COUNT(*) FROM pending_sync WHERE entityName = :entityName AND entityId = :entityId")
     suspend fun hasPending(entityName: String, entityId: String): Int
+
+    @Query("SELECT entityId FROM pending_sync WHERE entityName = :entityName AND entityId LIKE :idPrefix")
+    suspend fun pendingIds(entityName: String, idPrefix: String): List<String>
+}
+
+@Dao
+interface MerchantProductDao {
+    @Query("SELECT * FROM merchant_products WHERE merchantId = :merchantId ORDER BY name COLLATE NOCASE")
+    fun observe(merchantId: String): Flow<List<MerchantProductEntity>>
+
+    @Query("SELECT * FROM merchant_products WHERE merchantId = :merchantId ORDER BY name COLLATE NOCASE")
+    suspend fun getAll(merchantId: String): List<MerchantProductEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(product: MerchantProductEntity)
+
+    @Query("DELETE FROM merchant_products WHERE merchantId = :merchantId AND productId = :productId")
+    suspend fun delete(merchantId: String, productId: String)
+
+    @Query("DELETE FROM merchant_products WHERE merchantId = :merchantId AND productId = :productId")
+    suspend fun deleteRemote(merchantId: String, productId: String)
+}
+
+@Dao
+interface MerchantSettingDao {
+    @Query("SELECT * FROM merchant_settings WHERE merchantId = :merchantId AND settingId = :settingId LIMIT 1")
+    suspend fun get(merchantId: String, settingId: String): MerchantSettingEntity?
+
+    @Query("SELECT * FROM merchant_settings WHERE merchantId = :merchantId AND settingId = :settingId LIMIT 1")
+    fun observe(merchantId: String, settingId: String): Flow<MerchantSettingEntity?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(setting: MerchantSettingEntity)
+
+    @Query("DELETE FROM merchant_settings WHERE merchantId = :merchantId AND settingId = :settingId")
+    suspend fun delete(merchantId: String, settingId: String)
+}
+
+@Dao
+interface MerchantQrDao {
+    @Query("SELECT * FROM merchant_qrs WHERE merchantId = :merchantId ORDER BY provider")
+    suspend fun getAll(merchantId: String): List<MerchantQrEntity>
+
+    @Query("SELECT * FROM merchant_qrs WHERE merchantId = :merchantId AND provider = :provider LIMIT 1")
+    suspend fun get(merchantId: String, provider: String): MerchantQrEntity?
+
+    @Query("SELECT * FROM merchant_qrs WHERE merchantId = :merchantId ORDER BY provider")
+    fun observe(merchantId: String): Flow<List<MerchantQrEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(qr: MerchantQrEntity)
+
+    @Query("DELETE FROM merchant_qrs WHERE merchantId = :merchantId AND provider = :provider")
+    suspend fun delete(merchantId: String, provider: String)
 }
 
 @Database(
-    entities = [OrderEntity::class, CapturedNotificationEntity::class, BankRuleEntity::class, PendingSyncEntity::class],
-    version = 2,
+    entities = [OrderEntity::class, CapturedNotificationEntity::class, BankRuleEntity::class, PendingSyncEntity::class,
+        MerchantProductEntity::class, MerchantSettingEntity::class, MerchantQrEntity::class],
+    version = 4,
     exportSchema = true,
 )
 abstract class VeriPagoDatabase : RoomDatabase() {
@@ -154,6 +242,9 @@ abstract class VeriPagoDatabase : RoomDatabase() {
     abstract fun notificationDao(): NotificationDao
     abstract fun bankRuleDao(): BankRuleDao
     abstract fun pendingSyncDao(): PendingSyncDao
+    abstract fun merchantProductDao(): MerchantProductDao
+    abstract fun merchantSettingDao(): MerchantSettingDao
+    abstract fun merchantQrDao(): MerchantQrDao
 
     companion object {
         private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -161,11 +252,22 @@ abstract class VeriPagoDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE orders ADD COLUMN deliveredItemIndexesJson TEXT NOT NULL DEFAULT '[]'")
             }
         }
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS merchant_products (merchantId TEXT NOT NULL, productId TEXT NOT NULL, name TEXT NOT NULL, enteredPrice INTEGER NOT NULL, vatRate REAL NOT NULL, priceIncludesVat INTEGER NOT NULL, priceWithoutVat INTEGER NOT NULL, vatAmount INTEGER NOT NULL, priceWithVat INTEGER NOT NULL, updatedAt INTEGER NOT NULL, PRIMARY KEY(merchantId, productId))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS merchant_settings (merchantId TEXT NOT NULL, settingId TEXT NOT NULL, payloadJson TEXT NOT NULL, updatedAt INTEGER NOT NULL, PRIMARY KEY(merchantId, settingId))")
+            }
+        }
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS merchant_qrs (merchantId TEXT NOT NULL, provider TEXT NOT NULL, contentType TEXT NOT NULL, imageBase64 TEXT NOT NULL, paymentKeyLabel TEXT NOT NULL, beneficiaryName TEXT NOT NULL, updatedAt INTEGER NOT NULL, PRIMARY KEY(merchantId, provider))")
+            }
+        }
 
         @Volatile private var INSTANCE: VeriPagoDatabase? = null
         fun get(context: Context): VeriPagoDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context.applicationContext, VeriPagoDatabase::class.java, "veripago.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build().also { INSTANCE = it }
         }
     }

@@ -72,6 +72,15 @@ export async function getPaymentLinkBySlug(slug: string) {
   return { ...result.data(), id: result.get('linkId') as string } as PaymentLink
 }
 
+export async function getPublicMerchantQr(merchantId: string, provider: PaymentProvider): Promise<string | null> {
+  if (!db) throw new Error('No se pudo abrir el cobro.')
+  const snapshot = await getDoc(doc(db, 'public_merchant_qrs', merchantId, 'wallets', provider))
+  const imageBase64 = snapshot.exists() ? snapshot.get('imageBase64') : null
+  return typeof imageBase64 === 'string' && imageBase64.length <= 750_000
+    ? `data:image/png;base64,${imageBase64}`
+    : null
+}
+
 export async function createPaymentLink(input: Omit<PaymentLink, 'id' | 'merchantId' | 'isActive'>) {
   const { functions } = requireServices()
   const call = httpsCallable<typeof input, { id: string; slug: string }>(functions, 'createPaymentLink')

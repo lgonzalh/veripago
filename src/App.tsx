@@ -19,7 +19,7 @@ import nequiLogo from '../assets/logo_nequi.png'
 import { auth, db, functions, isFirebaseConfigured, storage } from './lib/firebase'
 import {
   createCheckout, createPaymentLink, getApkRelease, getOrders, getPaymentLinkBySlug,
-  getProfile, markOrderDelivered, signInWithGoogle, updatePaymentLink, uploadQr, watchCheckoutSession,
+  getProfile, getPublicMerchantQr, markOrderDelivered, signInWithGoogle, updatePaymentLink, uploadQr, watchCheckoutSession,
 } from './lib/data'
 import { calculateOrderTotal, formatCOP, slugify } from './lib/money'
 import { parseNotification } from './lib/bankParser'
@@ -217,11 +217,24 @@ function PublicCheckout() {
   const [orderCode, setOrderCode] = useState('')
   const [status, setStatus] = useState('PENDING')
   const [saving, setSaving] = useState(false)
+  const [paymentQrSource, setPaymentQrSource] = useState('')
   useEffect(() => { getPaymentLinkBySlug(slug).then((value) => { setLink(value); setLoading(false) }).catch((e) => { setError(errorText(e)); setLoading(false) }) }, [slug])
   useEffect(() => sessionId ? watchCheckoutSession(sessionId, (data) => { if (data?.paymentStatus) setStatus(String(data.paymentStatus)) }) : undefined, [sessionId])
   const items = link?.schemaJson.products ?? []
   const paymentMethods = link ? paymentMethodsForLink(link) : []
   const selectedPaymentMethod = paymentMethods.find((method) => method.provider === paymentProvider) ?? paymentMethods[0]
+  useEffect(() => {
+    if (!link || !selectedPaymentMethod) { setPaymentQrSource(''); return }
+    if (!selectedPaymentMethod.qrImageUrl.startsWith('veripagoqr://')) {
+      setPaymentQrSource(selectedPaymentMethod.qrImageUrl)
+      return
+    }
+    let active = true
+    getPublicMerchantQr(link.merchantId, selectedPaymentMethod.provider)
+      .then((source) => { if (active) setPaymentQrSource(source ?? '') })
+      .catch(() => { if (active) setPaymentQrSource('') })
+    return () => { active = false }
+  }, [link?.merchantId, selectedPaymentMethod?.provider, selectedPaymentMethod?.qrImageUrl])
   const chargedItems = items.map((item) => ({ ...item, unitPrice: item.unitPrice + adjustmentAmount(item.unitPrice, link?.adjustments?.perProduct) }))
   const subtotal = calculateOrderTotal(chargedItems.map((item) => ({ unitPrice: item.unitPrice, qty: quantities[item.id] ?? item.defaultQty ?? 1 })))
   const orderAdjustment = adjustmentAmount(subtotal, link?.adjustments?.perOrder)
@@ -248,7 +261,7 @@ function PublicCheckout() {
         </>}
         <div className="checkout-total"><span>Total a transferir</span><strong>{formatCOP(total)}</strong></div>
         {paymentMethods.length > 0 && <div className="checkout-wallet-options" aria-label="Elige cómo pagar">{paymentMethods.map((method) => <PaymentProviderChoice key={method.provider} provider={method.provider} selected={(selectedPaymentMethod?.provider ?? '') === method.provider} onSelect={() => setPaymentProvider(method.provider)} />)}</div>}
-        {selectedPaymentMethod && <div className="merchant-qr"><img src={selectedPaymentMethod.qrImageUrl} alt={`Código QR de pago para ${selectedPaymentMethod.beneficiaryName || link.title}`} /><div><b>{selectedPaymentMethod.paymentKeyLabel || 'Escanea para pagar'}</b><small>Transfiere con {walletProviders.find((item) => item.id === selectedPaymentMethod.provider)?.label ?? 'tu billetera'} directamente al comercio</small></div></div>}
+        {selectedPaymentMethod && paymentQrSource && <div className="merchant-qr"><img src={paymentQrSource} alt={`Código QR de pago para ${selectedPaymentMethod.beneficiaryName || link.title}`} /><div><b>{selectedPaymentMethod.paymentKeyLabel || 'Escanea para pagar'}</b><small>Transfiere con {walletProviders.find((item) => item.id === selectedPaymentMethod.provider)?.label ?? 'tu billetera'} directamente al comercio</small></div></div>}
         {link.merchantWhatsapp && <a className="button button-white button-full" href={`https://wa.me/${link.merchantWhatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"><MessageCircle size={17} /> Contactar al comercio por WhatsApp</a>}
         {error && <div className="inline-error">{error}</div>}
         {!sessionId ? <button className="button button-primary button-full" onClick={submit} disabled={saving || total <= 0}>{saving ? 'Preparando pedido…' : <>Confirmar pedido <ArrowRight size={17} /></>}</button> : <div className="waiting-banner"><span className="spinner" /><span>Esperando que el comercio confirme tu pago</span></div>}

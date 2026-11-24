@@ -43,12 +43,12 @@ object FirebaseClients {
     val isConfigured: Boolean get() = app != null
 
     suspend fun getUserProfile(uid: String) = retryFirestoreCall {
-        val database = firestore ?: error("Firestore no está disponible.")
+        val database = firestore ?: error("No hay conexión con el servicio de VeriPago.")
         database.collection("users").document(uid).get().await()
     }
 
     suspend fun updateLastLogin(uid: String) = retryFirestoreCall {
-        val database = firestore ?: error("Firestore no está disponible.")
+        val database = firestore ?: error("No hay conexión con el servicio de VeriPago.")
         database.collection("users").document(uid)
             .update("lastLoginAt", com.google.firebase.firestore.FieldValue.serverTimestamp()).await()
     }
@@ -81,7 +81,7 @@ private suspend fun <T> retryFirestoreCall(operation: suspend () -> T): T {
             delay(500L * (attempt + 1))
         }
     }
-    error("No se pudo completar la solicitud de Firestore.")
+    error("No se pudo completar la solicitud. Inténtalo de nuevo.")
 }
 
 class ProfileCache(private val context: Context) {

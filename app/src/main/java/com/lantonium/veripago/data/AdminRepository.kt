@@ -44,7 +44,7 @@ data class PlatformRelease(
 )
 
 class AdminRepository {
-    private val firestore get() = FirebaseClients.firestore ?: error("Firestore no está disponible.")
+    private val firestore get() = FirebaseClients.firestore ?: error("No hay conexión con el servicio de VeriPago.")
 
     suspend fun loadOverview(): AdminOverview = coroutineScope {
         val (orders, users) = coroutineScope {
