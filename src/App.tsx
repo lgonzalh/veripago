@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowDownToLine, ArrowRight, BadgeCheck, Bell, Check, ChevronDown,
-  CircleHelp, Clock3, FileDown, Link2, LogOut, Menu, PackageCheck, Plus, QrCode,
+  CircleHelp, Clock3, FileDown, Link2, LogOut, Menu, MessageCircle, PackageCheck, Plus, QrCode,
   ShieldCheck, Smartphone, Store, Truck, Wallet, X,
 } from 'lucide-react'
 import {
@@ -241,6 +241,7 @@ function PublicCheckout() {
         <div className="checkout-total"><span>Total a transferir</span><strong>{formatCOP(total)}</strong></div>
         {paymentMethods.length > 0 && <div className="checkout-wallet-options" aria-label="Elige cómo pagar">{paymentMethods.map((method) => <PaymentProviderChoice key={method.provider} provider={method.provider} selected={(selectedPaymentMethod?.provider ?? '') === method.provider} onSelect={() => setPaymentProvider(method.provider)} />)}</div>}
         {selectedPaymentMethod && <div className="merchant-qr"><img src={selectedPaymentMethod.qrImageUrl} alt={`Código QR de pago para ${selectedPaymentMethod.beneficiaryName || link.title}`} /><div><b>{selectedPaymentMethod.paymentKeyLabel || 'Escanea para pagar'}</b><small>Transfiere con {walletProviders.find((item) => item.id === selectedPaymentMethod.provider)?.label ?? 'tu billetera'} directamente al comercio</small></div></div>}
+        {link.merchantWhatsapp && <a className="button button-white button-full" href={`https://wa.me/${link.merchantWhatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"><MessageCircle size={17} /> Contactar al comercio por WhatsApp</a>}
         {error && <div className="inline-error">{error}</div>}
         {!sessionId ? <button className="button button-primary button-full" onClick={submit} disabled={saving || total <= 0}>{saving ? 'Preparando pedido…' : <>Confirmar pedido <ArrowRight size={17} /></>}</button> : <div className="waiting-banner"><span className="spinner" /><span>Esperando que el comercio confirme tu pago</span></div>}
         <div className="checkout-privacy"><ShieldCheck size={14} /> Tu transferencia es directa. VeriPago no retiene tu dinero.</div>

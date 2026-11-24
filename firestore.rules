@@ -53,6 +53,19 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['role', 'lastLoginAt']));
       allow delete: if isAdmin();
+
+      match /settings/{settingId} {
+        // Merchant contact details stay private to their own account.
+        allow get: if signedInWithGoogle() && request.auth.uid == uid;
+        allow list: if false;
+        allow create, update: if settingId == 'contact'
+          && isMerchant(uid)
+          && request.resource.data.keys().hasOnly(['whatsappNumber', 'updatedAt'])
+          && request.resource.data.whatsappNumber is string
+          && request.resource.data.whatsappNumber.size() <= 16
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if settingId == 'contact' && isMerchant(uid);
+      }
     }
 
     match /payment_links/{linkId} {

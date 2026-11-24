@@ -521,11 +521,29 @@ private fun FeatureLine(icon: androidx.compose.ui.graphics.vector.ImageVector, l
 
 @Composable
 private fun ProfileScreen(profile: UserProfile) {
+    val isDemo = isDemoMerchant(profile)
+    val scope = rememberCoroutineScope()
+    var whatsappNumber by rememberSaveable(profile.uid) { mutableStateOf("") }
+    var whatsappDraft by rememberSaveable(profile.uid) { mutableStateOf("") }
+    var loadingContact by remember(profile.uid) { mutableStateOf(!isDemo && profile.role == "COMERCIANTE") }
+    var savingContact by remember { mutableStateOf(false) }
+    var contactMessage by remember { mutableStateOf("") }
+    LaunchedEffect(profile.uid, isDemo) {
+        if (!isDemo && profile.role == "COMERCIANTE") {
+            runCatching {
+                FirebaseClients.firestore?.collection("users")?.document(profile.uid)
+                    ?.collection("settings")?.document("contact")?.get()?.await()
+                    ?.getString("whatsappNumber").orEmpty()
+            }.onSuccess { number -> whatsappNumber = number; whatsappDraft = number }
+                .onFailure { contactMessage = "No se pudo cargar el contacto de WhatsApp." }
+            loadingContact = false
+        }
+    }
     Column(
         Modifier.fillMaxSize().background(Color(0xFFF5F7FA)).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        if (isDemoMerchant(profile)) DemoNotice()
+        if (isDemo) DemoNotice()
         Text("PERFIL", color = Color(0xFF3473CC), fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
         Text("Tu cuenta VeriPago", color = Navy, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
@@ -557,6 +575,50 @@ private fun ProfileScreen(profile: UserProfile) {
                 Text(if (profile.role == "ADMINISTRADOR") "Administrador" else "Comerciante", color = Navy, fontSize = 13.sp)
             }
         }
+        if (profile.role == "COMERCIANTE") {
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+                Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("WhatsApp del comercio", color = Navy, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("Este número aparecerá como contacto en tus enlaces de cobro.", color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
+                    if (isDemo) {
+                        Text("En la prueba no se guarda ni se publica ningún número.", color = Color(0xFFB54743), fontSize = 10.sp)
+                    } else {
+                        OutlinedTextField(
+                            value = whatsappDraft,
+                            onValueChange = { whatsappDraft = it.take(20); contactMessage = "" },
+                            label = { Text("Número del comerciante") },
+                            placeholder = { Text("+57 300 000 0000") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                            singleLine = true,
+                            enabled = !loadingContact && !savingContact,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Button(
+                            enabled = !loadingContact && !savingContact && whatsappDraft != whatsappNumber,
+                            onClick = {
+                                val normalized = normalizeWhatsappNumber(whatsappDraft)
+                                if (normalized == null) {
+                                    contactMessage = "Ingresa un número válido, por ejemplo +57 300 000 0000."
+                                } else scope.launch {
+                                    savingContact = true; contactMessage = ""
+                                    runCatching {
+                                        val firestore = FirebaseClients.firestore ?: error("Firebase no está configurado.")
+                                        firestore.collection("users").document(profile.uid).collection("settings").document("contact")
+                                            .set(mapOf("whatsappNumber" to normalized, "updatedAt" to FieldValue.serverTimestamp())).await()
+                                    }.onSuccess {
+                                        whatsappNumber = normalized; whatsappDraft = normalized
+                                        contactMessage = "Número guardado. Los nuevos enlaces incluirán este contacto."
+                                    }.onFailure { contactMessage = it.localizedMessage ?: "No se pudo guardar el número." }
+                                    savingContact = false
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text(if (loadingContact) "Cargando…" else if (savingContact) "Guardando…" else "Guardar número") }
+                    }
+                    if (contactMessage.isNotBlank()) Text(contactMessage, color = if (contactMessage.startsWith("No se pudo") || contactMessage.startsWith("Ingresa")) Color(0xFFB54743) else Green, fontSize = 10.sp)
+                }
+            }
+        }
     }
 }
 
@@ -571,6 +633,8 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
     var demoSharePreview by remember { mutableStateOf<String?>(null) }
     var configuredPaymentMethods by remember { mutableStateOf<List<AndroidPaymentMethod>>(emptyList()) }
     var selectedPaymentProvider by rememberSaveable { mutableStateOf("NEQUI") }
+    var customerWhatsapp by rememberSaveable(profile.uid) { mutableStateOf("") }
+    var merchantWhatsapp by remember(profile.uid) { mutableStateOf("") }
     var latestOrders by remember { mutableStateOf<List<OrderEntity>>(emptyList()) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -586,6 +650,8 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
         sync.start(profile.uid)
         runCatching {
             val firestore = FirebaseClients.firestore ?: return@runCatching
+            merchantWhatsapp = firestore.collection("users").document(profile.uid)
+                .collection("settings").document("contact").get().await().getString("whatsappNumber").orEmpty()
             val link = firestore.collection("payment_links").whereEqualTo("merchantId", profile.uid)
                 .whereEqualTo("defaultMode", "IN_SITU_QR").whereEqualTo("isActive", true).limit(1).get().await().documents.firstOrNull()
             if (link != null) {
@@ -648,6 +714,15 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
                         }
                     }
                     if (configuredPaymentMethods.isEmpty()) Text("Configura tus QR de Nequi, DaviPlata o Bre-B desde VeriPago Web.", color = Muted, fontSize = 10.sp)
+                    OutlinedTextField(
+                        value = customerWhatsapp,
+                        onValueChange = { customerWhatsapp = it.take(20) },
+                        label = { Text("WhatsApp del cliente") },
+                        placeholder = { Text("+57 300 000 0000") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     Button(
                         enabled = !busy && amount > 0 && selectedPaymentMethod != null,
                         onClick = {
@@ -698,11 +773,14 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
                                     if (isDemo) {
                                         val name = productName.ifBlank { "Pedido de prueba" }
                                         val demoLink = "https://demo.veripago.local/${System.currentTimeMillis().toString().takeLast(6)}"
-                                        demoSharePreview = "Hola, completa tu pedido de prueba: $demoLink\n\nEste enlace es demostrativo y no recibe pagos."
+                                        demoSharePreview = "Para: ${customerWhatsapp.ifBlank { "número del cliente" }}\nContacto de comercio: solo se configura en el perfil real.\n\nHola, completa tu pedido de prueba: $demoLink\n\nEste enlace es demostrativo y no recibe pagos."
                                     } else {
+                                        val customerPhone = normalizeWhatsappNumber(customerWhatsapp)
+                                            ?: error("Ingresa un WhatsApp de cliente válido, por ejemplo +57 300 000 0000.")
+                                        if (normalizeWhatsappNumber(merchantWhatsapp) == null) error("Guarda primero el WhatsApp del comercio en Perfil.")
                                         val url = createShareLink(profile, productName.ifBlank { "Pedido" }, price.toLong())
                                         val share = "Hola, completa tu pedido: $url"
-                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/?text=${Uri.encode(share)}")))
+                                        openWhatsAppShare(context, customerPhone, share)
                                     }
                                 } catch (exception: Exception) { onError(exception.localizedMessage ?: "No se pudo crear el enlace.") }
                                 finally { busy = false }
@@ -834,6 +912,34 @@ private suspend fun createShareLink(profile: UserProfile, name: String, price: L
         ) },
     )).await().data as Map<*, *>
         "https://veripago-9cda6.web.app/VeriPago/${result["slug"]}"
+}
+
+private fun normalizeWhatsappNumber(raw: String): String? {
+    val digits = raw.filter(Char::isDigit)
+    val international = when {
+        digits.length == 10 && digits.startsWith('3') -> "57$digits"
+        digits.length in 11..15 -> digits
+        else -> return null
+    }
+    return "+$international"
+}
+
+private fun openWhatsAppShare(context: android.content.Context, phone: String, message: String) {
+    val uri = Uri.parse("https://wa.me/${phone.filter(Char::isDigit)}?text=${Uri.encode(message)}")
+    val installedPackages = listOf("com.whatsapp", "com.whatsapp.w4b").filter { packageName ->
+        runCatching { context.packageManager.getPackageInfo(packageName, 0) }.isSuccess
+    }
+    if (installedPackages.isEmpty()) error("Instala WhatsApp o WhatsApp Business para compartir el enlace.")
+    val targets = installedPackages.map { packageName ->
+        Intent(Intent.ACTION_VIEW, uri).setPackage(packageName)
+    }
+    if (targets.size == 1) {
+        context.startActivity(targets.single())
+    } else {
+        val chooser = Intent.createChooser(targets.first(), "Enviar con WhatsApp")
+        chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, targets.drop(1).toTypedArray())
+        context.startActivity(chooser)
+    }
 }
 
 @Composable

@@ -189,6 +189,11 @@ export const createPaymentLink = onCall({ region, enforceAppCheck: false }, asyn
   }
   const products = validateProducts((data.schemaJson as Record<string, unknown> | undefined)?.products)
   const paymentMethods = normalizePaymentMethods(data.paymentMethods, data)
+  const contact = await db.doc(`users/${auth.uid}/settings/contact`).get()
+  const merchantWhatsapp = typeof contact.get('whatsappNumber') === 'string' ? contact.get('whatsappNumber') as string : ''
+  if (merchantWhatsapp && !/^\+[1-9]\d{7,14}$/.test(merchantWhatsapp)) {
+    fail('failed-precondition', 'Actualiza el WhatsApp del comercio en tu perfil antes de crear el enlace.')
+  }
   const linkRef = db.collection('payment_links').doc()
   const slugRef = db.doc(`slug_reservations/${slug}`)
   const publicLinkRef = db.doc(`public_payment_links/${slug}`)
@@ -207,6 +212,7 @@ export const createPaymentLink = onCall({ region, enforceAppCheck: false }, asyn
       defaultMode: data.defaultMode,
       schemaJson: { products, captureCustomerInfo: Boolean((data.schemaJson as Record<string, unknown> | undefined)?.captureCustomerInfo) },
       ...paymentMethodFields(paymentMethods),
+      ...(merchantWhatsapp ? { merchantWhatsapp } : {}),
       reconciliationWindowMinutes: 20,
       isActive: true,
       createdAt: FieldValue.serverTimestamp(),
@@ -232,6 +238,11 @@ export const updatePaymentLink = onCall({ region, enforceAppCheck: false }, asyn
     ...current.data(),
     ...data,
   })
+  const contact = await db.doc(`users/${auth.uid}/settings/contact`).get()
+  const merchantWhatsapp = typeof contact.get('whatsappNumber') === 'string' ? contact.get('whatsappNumber') as string : ''
+  if (merchantWhatsapp && !/^\+[1-9]\d{7,14}$/.test(merchantWhatsapp)) {
+    fail('failed-precondition', 'Actualiza el WhatsApp del comercio en tu perfil antes de actualizar el enlace.')
+  }
   await db.runTransaction(async (transaction) => {
     const [link, publicLink] = await Promise.all([transaction.get(linkRef), transaction.get(publicRef)])
     if (!link.exists || link.get('merchantId') !== auth.uid || !publicLink.exists) {
@@ -240,6 +251,7 @@ export const updatePaymentLink = onCall({ region, enforceAppCheck: false }, asyn
     const patch = {
       schemaJson: { products, captureCustomerInfo: Boolean((data.schemaJson as Record<string, unknown> | undefined)?.captureCustomerInfo) },
       ...paymentMethodFields(paymentMethods),
+      merchantWhatsapp: merchantWhatsapp || FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp(),
     }
     transaction.update(linkRef, patch)

@@ -40,6 +40,7 @@ export interface PaymentLink {
   beneficiaryName: string
   paymentProvider?: PaymentProvider
   paymentMethods?: PaymentMethod[]
+  merchantWhatsapp?: string
   isActive: boolean
 }
 
