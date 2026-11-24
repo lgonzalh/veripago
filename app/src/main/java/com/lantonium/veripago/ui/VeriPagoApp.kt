@@ -86,7 +86,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.CustomCredential
+import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -98,6 +100,7 @@ import coil.decode.GifDecoder
 import coil.request.ImageRequest
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.DocumentSnapshot
@@ -188,8 +191,15 @@ fun VeriPagoApp(activity: Activity) {
                     .setAutoSelectEnabled(false)
                     .build()
                 val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
-                val result = credentialManager.getCredential(activity, request)
-                val credential = result.credential
+                val credential = try {
+                    credentialManager.getCredential(activity, request).credential
+                } catch (credentialError: GetCredentialException) {
+                    if (credentialError is GetCredentialCancellationException) throw credentialError
+                    val signInOption = GetSignInWithGoogleOption.Builder(BuildConfig.WEB_CLIENT_ID)
+                        .build()
+                    val signInRequest = GetCredentialRequest.Builder().addCredentialOption(signInOption).build()
+                    credentialManager.getCredential(activity, signInRequest).credential
+                }
                 if (credential !is CustomCredential || credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                     error("Google no devolvió una credencial compatible.")
                 }
@@ -199,8 +209,12 @@ fun VeriPagoApp(activity: Activity) {
                 error = ""
                 snackbar.showSnackbar("Hola, ${profile?.displayName?.substringBefore(' ')}. Tu espacio está listo.")
                 if (profile?.role == "COMERCIANTE") startPaymentListener(context)
+            } catch (exception: GetCredentialCancellationException) {
+                error = "Se canceló el inicio de sesión con Google."
+            } catch (exception: NoCredentialException) {
+                error = "No se encontró una cuenta de Google disponible en este dispositivo."
             } catch (exception: GetCredentialException) {
-                error = exception.localizedMessage ?: "No se pudo iniciar sesión con Google."
+                error = "Google no pudo ofrecer una cuenta. Revisa la conexión e inténtalo de nuevo."
             } catch (exception: Exception) {
                 error = exception.localizedMessage ?: "No se pudo iniciar sesión."
             }
