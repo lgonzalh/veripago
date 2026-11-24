@@ -635,11 +635,28 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
     var selectedPaymentProvider by rememberSaveable { mutableStateOf("NEQUI") }
     var customerWhatsapp by rememberSaveable(profile.uid) { mutableStateOf("") }
     var merchantWhatsapp by remember(profile.uid) { mutableStateOf("") }
+    var pendingQrProvider by remember { mutableStateOf("") }
+    var uploadingQrProvider by remember { mutableStateOf("") }
+    var qrUploadMessage by remember { mutableStateOf("") }
     var latestOrders by remember { mutableStateOf<List<OrderEntity>>(emptyList()) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val installedWalletApps = remember(profile.uid) { detectInstalledWalletApps(context) }
     val amount = (price.toLongOrNull() ?: 0L) * (quantity.toIntOrNull()?.coerceIn(1, 100) ?: 1)
+    val qrPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val provider = pendingQrProvider
+        if (uri != null && provider.isNotBlank()) scope.launch {
+            uploadingQrProvider = provider; qrUploadMessage = ""
+            runCatching {
+                uploadAndSaveWalletQr(context, profile, provider, uri)
+            }.onSuccess { methods ->
+                configuredPaymentMethods = methods
+                selectedPaymentProvider = provider
+                qrUploadMessage = "QR de ${paymentProviderNames[provider]} guardado. VeriPago no valida su titular ni su destino."
+            }.onFailure { qrUploadMessage = it.localizedMessage ?: "No se pudo guardar el QR." }
+            uploadingQrProvider = ""
+        }
+    }
     LaunchedEffect(profile.uid) {
         if (isDemo) {
             configuredPaymentMethods = listOf("NEQUI", "DAVIPLATA", "BRE_B").map { provider ->
@@ -721,6 +738,25 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
                     if (installedWalletApps.none { it == NEQUI_PACKAGE || it == DAVIPLATA_PACKAGE }) {
                         Text("Instala Nequi o DaviPlata para habilitar estas billeteras y Bre-B.", color = Muted, fontSize = 9.sp)
                     }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        listOf("NEQUI", "DAVIPLATA", "BRE_B").forEach { provider ->
+                            val currentMethod = configuredPaymentMethods.find { it.provider == provider }
+                            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                                OutlinedButton(
+                                    enabled = !isDemo && uploadingQrProvider.isBlank(),
+                                    onClick = { pendingQrProvider = provider; qrPicker.launch(arrayOf("image/png", "image/jpeg", "image/webp")) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 3.dp, vertical = 5.dp),
+                                ) {
+                                    if (uploadingQrProvider == provider) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+                                    else Text(if (currentMethod == null) "Subir ${paymentProviderNames[provider]}" else "Cambiar QR ${paymentProviderNames[provider]}", fontSize = 8.sp, maxLines = 1)
+                                }
+                                if (currentMethod != null) AsyncImage(currentMethod.qrImageUrl, contentDescription = "QR guardado para ${paymentProviderNames[provider]}", modifier = Modifier.size(48.dp).padding(top = 3.dp))
+                            }
+                        }
+                    }
+                    if (isDemo) Text("La carga de QR está disponible al iniciar sesión con tu cuenta real.", color = Muted, fontSize = 9.sp)
+                    if (qrUploadMessage.isNotBlank()) Text(qrUploadMessage, color = if (qrUploadMessage.startsWith("No se pudo")) Color(0xFFB54743) else Green, fontSize = 9.sp)
                     if (configuredPaymentMethods.isEmpty()) Text("Configura tus QR de Nequi, DaviPlata o Bre-B desde VeriPago Web.", color = Muted, fontSize = 10.sp)
                     OutlinedTextField(
                         value = customerWhatsapp,
@@ -946,6 +982,68 @@ private fun isWalletProviderAvailable(provider: String, installedApps: Set<Strin
     // Bre-B is a transfer rail available inside supported wallet apps, not a standalone app.
     "BRE_B" -> NEQUI_PACKAGE in installedApps || DAVIPLATA_PACKAGE in installedApps
     else -> true
+}
+
+private suspend fun uploadAndSaveWalletQr(
+    context: android.content.Context,
+    profile: UserProfile,
+    provider: String,
+    uri: Uri,
+): List<AndroidPaymentMethod> = withContext(Dispatchers.IO) {
+    val contentType = context.contentResolver.getType(uri)?.lowercase(Locale.ROOT)
+        ?.takeIf { it in setOf("image/png", "image/jpeg", "image/webp") }
+        ?: error("El QR debe ser una imagen PNG, JPEG o WebP.")
+    val size = runCatching { context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L }.getOrDefault(-1L)
+    if (size >= 2L * 1024 * 1024) error("La imagen del QR debe pesar menos de 2 MB.")
+    val storage = FirebaseClients.storage ?: error("Firebase Storage no está disponible.")
+    val functions = FirebaseClients.functions ?: error("Cloud Functions no está disponible.")
+    val filename = "qr_codes/${profile.uid}/${provider.lowercase(Locale.ROOT)}-${java.util.UUID.randomUUID()}"
+    val location = storage.reference.child(filename)
+    val metadata = com.google.firebase.storage.StorageMetadata.Builder().setContentType(contentType).build()
+    location.putFile(uri, metadata).await()
+    val qrUrl = location.downloadUrl.await().toString()
+
+    val firestore = FirebaseClients.firestore ?: error("Firestore no está disponible.")
+    val link = firestore.collection("payment_links").whereEqualTo("merchantId", profile.uid)
+        .whereEqualTo("defaultMode", "IN_SITU_QR").whereEqualTo("isActive", true).limit(1).get().await().documents.firstOrNull()
+    val existingMethods = link?.let(::parsePaymentMethods).orEmpty()
+    val prior = existingMethods.find { it.provider == provider }
+    val method = AndroidPaymentMethod(
+        provider = provider,
+        qrImageUrl = qrUrl,
+        paymentKeyLabel = prior?.paymentKeyLabel?.ifBlank { "QR ${paymentProviderNames[provider]}" } ?: "QR ${paymentProviderNames[provider]}",
+        beneficiaryName = prior?.beneficiaryName?.ifBlank { profile.displayName } ?: profile.displayName,
+    )
+    val retainedMethods = existingMethods.filterNot { it.provider == provider }.toMutableList()
+    if (retainedMethods.size >= 3) {
+        val otherIndex = retainedMethods.indexOfFirst { it.provider == "OTHER" }
+        if (otherIndex >= 0) retainedMethods.removeAt(otherIndex)
+        else error("Ya configuraste tres billeteras. Cambia uno de esos QR para continuar.")
+    }
+    val methods = retainedMethods + method
+    val methodsPayload = methods.map { item ->
+        mapOf("provider" to item.provider, "qrImageUrl" to item.qrImageUrl, "paymentKeyLabel" to item.paymentKeyLabel, "beneficiaryName" to item.beneficiaryName)
+    }
+    val result: Map<*, *>
+    if (link == null) {
+        result = functions.getHttpsCallable("createPaymentLink").call(mapOf(
+            "slug" to "android-cobro-${java.util.UUID.randomUUID().toString().take(8)}",
+            "title" to "Cobro rápido",
+            "defaultMode" to "IN_SITU_QR",
+            "schemaJson" to mapOf("products" to listOf(mapOf("id" to "android-quick-item", "name" to "Cobro rápido", "unitPrice" to 0)), "captureCustomerInfo" to false),
+            "paymentMethods" to methodsPayload,
+        )).await().data as Map<*, *>
+    } else {
+        val schema = link.get("schemaJson") as? Map<*, *> ?: error("El enlace de cobro no tiene una configuración válida.")
+        val products = schema["products"] as? List<*> ?: error("Agrega un producto o pedido desde el espacio web antes de configurar el QR.")
+        result = functions.getHttpsCallable("updatePaymentLink").call(mapOf(
+            "id" to link.id,
+            "schemaJson" to mapOf("products" to products, "captureCustomerInfo" to (schema["captureCustomerInfo"] as? Boolean ?: false)),
+            "paymentMethods" to methodsPayload,
+        )).await().data as? Map<*, *> ?: mapOf("id" to link.id)
+    }
+    if ((result["id"] as? String).isNullOrBlank() && link == null) error("No se pudo guardar la configuración del QR.")
+    methods
 }
 
 private fun openWhatsAppShare(context: android.content.Context, phone: String, message: String) {
