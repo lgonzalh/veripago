@@ -1032,8 +1032,8 @@ private fun MerchantScreen(
                 }
                 if (catalogProducts.isEmpty()) {
                     Text("Agrega productos para preparar un cobro.", color = Muted, fontSize = DesignTokens.bodyText)
-                    OutlinedButton(onClick = onOpenCatalog, modifier = Modifier.fillMaxWidth().height(40.dp)) {
-                        Icon(Icons.Default.Storefront, null, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(6.dp)); Text("Abrir Productos")
+                    AppOutlinedButton(onClick = onOpenCatalog, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Storefront, null, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(6.dp)); Text("Abrir Productos", fontSize = DesignTokens.bodyText, maxLines = 1)
                     }
                 } else {
                     val chosenLines = chargeLines.filter { it.catalogProductId?.isNotBlank() == true }
@@ -1074,8 +1074,8 @@ private fun MerchantScreen(
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 modifier = Modifier.width(100.dp),
                             )
-                            if (chargeLines.size > 1) IconButton(onClick = { chargeLines = chargeLines.filterNot { it.id == line.id } }, modifier = Modifier.size(34.dp)) {
-                                Text("×", color = Muted, fontSize = DesignTokens.bodyText)
+                            if (chargeLines.size > 1) AppOutlinedButton(onClick = { chargeLines = chargeLines.filterNot { it.id == line.id } }, modifier = Modifier.size(52.dp)) {
+                                Text("×", color = Muted, fontSize = DesignTokens.bodyText, maxLines = 1)
                             }
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -1085,12 +1085,11 @@ private fun MerchantScreen(
                         }
                     }
                     Box {
-                        TextButton(
+                        AppOutlinedButton(
                             enabled = chargeLines.size < 50,
                             onClick = { addProductMenuOpen = true },
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 0.dp),
-                            modifier = Modifier.height(32.dp),
-                        ) { Text("＋ Agregar producto del catálogo", fontSize = DesignTokens.bodyText) }
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("＋ Agregar producto del catálogo", fontSize = DesignTokens.bodyText, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                         DropdownMenu(expanded = addProductMenuOpen, onDismissRequest = { addProductMenuOpen = false }) {
                             catalogProducts.forEach { product ->
                                 DropdownMenuItem(
@@ -1229,7 +1228,7 @@ private fun MerchantScreen(
                     Spacer(Modifier.height(6.dp)); Text(if (isDemo) "Simulación local: no se crea un cobro real." else "Esperando confirmación del pago…", color = if (isDemo) Muted else Green, fontSize = DesignTokens.bodyText)
                 }
             },
-            confirmButton = { TextButton(onClick = { qrState = null }) { Text("Listo") } },
+            confirmButton = { AppButton(onClick = { qrState = null }) { Text("Listo", fontSize = DesignTokens.bodyText, maxLines = 1) } },
         )
     }
 
@@ -1241,7 +1240,7 @@ private fun MerchantScreen(
                 Text(preview, color = Muted, fontSize = DesignTokens.bodyText)
                 Text("Modo demo: no se envía el mensaje ni se crea un enlace de pago.", color = Color(0xFFB54743), fontSize = DesignTokens.bodyText)
             } },
-            confirmButton = { TextButton(onClick = { demoSharePreview = null }) { Text("Cerrar") } },
+            confirmButton = { AppButton(onClick = { demoSharePreview = null }) { Text("Cerrar", fontSize = DesignTokens.bodyText, maxLines = 1) } },
         )
     }
 }
@@ -1384,7 +1383,7 @@ private fun MerchantCatalogScreen(
                         },
                         modifier = Modifier.weight(1f),
                     ) { Text(if (savingProduct) "Guardando…" else if (editingProductId.isBlank()) "Guardar producto" else "Guardar cambios", fontSize = DesignTokens.bodyText, maxLines = 1) }
-                    if (editingProductId.isNotBlank()) TextButton(onClick = { editingProductId = ""; catalogName = ""; catalogPrice = ""; catalogVatRate = ""; catalogPriceIncludesVat = false }) { Text("Cancelar", fontSize = DesignTokens.bodyText) }
+                    if (editingProductId.isNotBlank()) AppOutlinedButton(onClick = { editingProductId = ""; catalogName = ""; catalogPrice = ""; catalogVatRate = ""; catalogPriceIncludesVat = false }) { Text("Cancelar", fontSize = DesignTokens.bodyText, maxLines = 1) }
                 }
                 if (catalogMessage.isNotBlank()) Text(catalogMessage, color = if (catalogMessage.startsWith("No se pudo") || catalogMessage.startsWith("El IVA")) Color(0xFFB54743) else Green, fontSize = DesignTokens.bodyText, maxLines = 1)
             }
@@ -1449,15 +1448,15 @@ private fun MerchantCatalogScreen(
                             Text(product.name, color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.SemiBold)
                             Text("IVA ${product.vatRate}% · Sin IVA ${formatCop(product.priceWithoutVat)} · Total ${formatCop(product.priceWithVat)}", color = Muted, fontSize = DesignTokens.bodyText, lineHeight = 20.sp, modifier = Modifier.fillMaxWidth())
                             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                                TextButton(onClick = {
+                                AppOutlinedButton(onClick = {
                                     editingProductId = product.id
                                     catalogName = product.name
                                     catalogPrice = product.enteredPrice.toString()
                                     catalogVatRate = if (product.vatRate == 0.0) "" else product.vatRate.toString()
                                     catalogPriceIncludesVat = product.priceIncludesVat
                                     showProducts = false
-                                }) { Text("Editar", fontSize = DesignTokens.bodyText) }
-                                TextButton(enabled = !savingProduct, onClick = {
+                                }, modifier = Modifier.weight(1f)) { Text("Editar", fontSize = DesignTokens.bodyText, maxLines = 1) }
+                                AppOutlinedButton(enabled = !savingProduct, onClick = {
                                     scope.launch {
                                         savingProduct = true
                                         var deleteSynced = true
@@ -1471,14 +1470,14 @@ private fun MerchantCatalogScreen(
                                             .onFailure { catalogMessage = firestoreWriteErrorMessage(it, "eliminar el producto", "No se pudo eliminar el producto.") }
                                         savingProduct = false
                                     }
-                                }) { Text("Eliminar", color = Color(0xFFB54743), fontSize = DesignTokens.bodyText) }
+                                }, modifier = Modifier.weight(1f)) { Text("Eliminar", color = Color(0xFFB54743), fontSize = DesignTokens.bodyText, maxLines = 1) }
                             }
                         }
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { showProducts = false }) { Text("Cerrar") } },
+        confirmButton = { AppButton(onClick = { showProducts = false }) { Text("Cerrar", fontSize = DesignTokens.bodyText, maxLines = 1) } },
     )
 }
 
