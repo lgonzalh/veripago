@@ -978,7 +978,7 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
                         modifier = Modifier.fillMaxWidth().height(47.dp), shape = RoundedCornerShape(11.dp),
                     ) {
                         if (busy) CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp, color = Color.White)
-                        else { Icon(Icons.Default.QrCode2, null); Spacer(Modifier.width(7.dp)); Text("Mostrar QR en mostrador") }
+                        else { Icon(Icons.Default.QrCode2, null); Spacer(Modifier.width(7.dp)); Text("Mostrar QR") }
                     }
                     OutlinedButton(
                         enabled = !busy && chargeIsValid,
