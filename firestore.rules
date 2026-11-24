@@ -41,6 +41,29 @@ service cloud.firestore {
         && ((data.priceIncludesVat && data.enteredPrice == data.priceWithVat)
           || (!data.priceIncludesVat && data.enteredPrice == data.priceWithoutVat));
     }
+    function validAdjustmentRule(rule) {
+      return rule is map
+        && rule.keys().hasOnly(['enabled', 'mode', 'value'])
+        && rule.enabled is bool
+        && rule.mode in ['FIXED', 'PERCENT']
+        && rule.value is number
+        && rule.value >= 0
+        && ((rule.mode == 'FIXED' && rule.value <= 1000000000)
+          || (rule.mode == 'PERCENT' && rule.value <= 100));
+    }
+    function validMerchantAdjustments(adjustments) {
+      return adjustments is map
+        && adjustments.keys().hasOnly(['perProduct', 'perOrder'])
+        && validAdjustmentRule(adjustments.perProduct)
+        && validAdjustmentRule(adjustments.perOrder);
+    }
+    function validMerchantFeeSettings(data) {
+      return data.keys().hasOnly(['perProduct', 'perOrder', 'updatedAt'])
+        && data.keys().hasAll(['perProduct', 'perOrder', 'updatedAt'])
+        && data.updatedAt == request.time
+        && validAdjustmentRule(data.perProduct)
+        && validAdjustmentRule(data.perOrder);
+    }
     function validDeliveredItemProgress() {
       return resource.data.paymentStatus in ['VERIFIED_AUTO', 'VERIFIED_MANUAL']
         && request.resource.data.paymentStatus == resource.data.paymentStatus
@@ -101,12 +124,18 @@ service cloud.firestore {
         // Merchant contact details stay private to their own account.
         allow get: if signedInWithGoogle() && request.auth.uid == uid;
         allow list: if false;
-        allow create, update: if settingId == 'contact'
+        allow create, update: if (
+          settingId == 'contact'
           && isMerchant(uid)
           && request.resource.data.keys().hasOnly(['whatsappNumber', 'updatedAt'])
           && request.resource.data.whatsappNumber is string
           && request.resource.data.whatsappNumber.size() <= 16
-          && request.resource.data.updatedAt == request.time;
+          && request.resource.data.updatedAt == request.time
+        ) || (
+          settingId == 'fees'
+          && isMerchant(uid)
+          && validMerchantFeeSettings(request.resource.data)
+        );
         allow delete: if settingId == 'contact' && isMerchant(uid);
       }
 
@@ -123,14 +152,24 @@ service cloud.firestore {
         && (request.auth.uid == resource.data.merchantId || isAdmin()));
       // Creation and slug reservation run in a trusted transaction to enforce uniqueness.
       allow create: if false;
-      allow update, delete: if false;
+      allow update: if isMerchant(resource.data.merchantId)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['adjustments', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time
+        && validMerchantAdjustments(request.resource.data.adjustments);
+      allow delete: if false;
     }
 
     match /public_payment_links/{slug} {
       // Public checkout uses a document key lookup. Listing the public catalog is denied.
       allow get: if resource.data.isActive == true;
       allow list: if false;
-      allow write: if false;
+      allow update: if isMerchant(resource.data.merchantId)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['adjustments', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time
+        && validMerchantAdjustments(request.resource.data.adjustments);
+      allow create, delete: if false;
     }
 
     match /orders/{orderId} {

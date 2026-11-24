@@ -106,6 +106,79 @@ describe('Firestore security rules', () => {
     await assertFails(setDoc(doc(db, 'orders', 'paid-order'), { ...order, paymentStatus: 'VERIFIED_AUTO' }))
   })
 
+  it('keeps each merchant product catalog private and validates stored VAT prices', async () => {
+    await seedUser('merchant-catalog-1', 'COMERCIANTE')
+    await seedUser('merchant-catalog-2', 'COMERCIANTE')
+    const product = {
+      name: 'Café',
+      enteredPrice: 100_000,
+      vatRate: 19,
+      priceIncludesVat: false,
+      priceWithoutVat: 100_000,
+      vatAmount: 19_000,
+      priceWithVat: 119_000,
+    }
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', 'merchant-catalog-2', 'products', 'private-item'), product)
+    })
+
+    const merchant = googleUser('merchant-catalog-1')
+    const ownCatalog = collection(merchant, 'users', 'merchant-catalog-1', 'products')
+    await assertSucceeds(setDoc(doc(ownCatalog, 'coffee'), product))
+    await assertSucceeds(getDoc(doc(ownCatalog, 'coffee')))
+    await assertSucceeds(getDocs(ownCatalog))
+    await assertFails(getDoc(doc(merchant, 'users', 'merchant-catalog-2', 'products', 'private-item')))
+    await assertFails(getDocs(collection(merchant, 'users', 'merchant-catalog-2', 'products')))
+    await assertFails(setDoc(doc(merchant, 'users', 'merchant-catalog-2', 'products', 'stolen-item'), product))
+    await assertFails(setDoc(doc(ownCatalog, 'invalid-vat'), { ...product, priceWithVat: 100_000 }))
+  })
+
+  it('keeps the merchant WhatsApp contact private and writable only by its owner', async () => {
+    await seedUser('merchant-contact-1', 'COMERCIANTE')
+    await seedUser('merchant-contact-2', 'COMERCIANTE')
+    const merchant = googleUser('merchant-contact-1')
+    const contact = doc(merchant, 'users', 'merchant-contact-1', 'settings', 'contact')
+    await assertSucceeds(setDoc(contact, { whatsappNumber: '+573001234567', updatedAt: serverTimestamp() }))
+    await assertSucceeds(getDoc(contact))
+    await assertFails(getDoc(doc(merchant, 'users', 'merchant-contact-2', 'settings', 'contact')))
+    await assertFails(setDoc(doc(merchant, 'users', 'merchant-contact-2', 'settings', 'contact'), {
+      whatsappNumber: '+573001234567',
+      updatedAt: serverTimestamp(),
+    }))
+  })
+
+  it('allows a merchant to save valid adjustments only to its own settings and payment links', async () => {
+    await seedUser('merchant-fees-1', 'COMERCIANTE')
+    await seedUser('merchant-fees-2', 'COMERCIANTE')
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      const link = { merchantId: 'merchant-fees-1', slug: 'fees-link', title: 'Pedido', adjustments: { perProduct: { enabled: false, mode: 'FIXED', value: 0 }, perOrder: { enabled: false, mode: 'FIXED', value: 0 } } }
+      const otherLink = { ...link, merchantId: 'merchant-fees-2', slug: 'other-fees-link' }
+      await setDoc(doc(db, 'payment_links', 'fees-link'), link)
+      await setDoc(doc(db, 'public_payment_links', 'fees-link'), { ...link, linkId: 'fees-link', isActive: true })
+      await setDoc(doc(db, 'payment_links', 'other-fees-link'), otherLink)
+      await setDoc(doc(db, 'public_payment_links', 'other-fees-link'), { ...otherLink, linkId: 'other-fees-link', isActive: true })
+    })
+
+    const merchant = googleUser('merchant-fees-1')
+    const adjustments = {
+      perProduct: { enabled: true, mode: 'PERCENT', value: 5 },
+      perOrder: { enabled: true, mode: 'FIXED', value: 500 },
+    }
+    const feeSettings = doc(merchant, 'users', 'merchant-fees-1', 'settings', 'fees')
+    await assertSucceeds(setDoc(feeSettings, { ...adjustments, updatedAt: serverTimestamp() }))
+    await assertFails(setDoc(doc(merchant, 'users', 'merchant-fees-2', 'settings', 'fees'), { ...adjustments, updatedAt: serverTimestamp() }))
+    await assertSucceeds(updateDoc(doc(merchant, 'payment_links', 'fees-link'), { adjustments, updatedAt: serverTimestamp() }))
+    await assertSucceeds(updateDoc(doc(merchant, 'public_payment_links', 'fees-link'), { adjustments, updatedAt: serverTimestamp() }))
+    await assertFails(updateDoc(doc(merchant, 'payment_links', 'other-fees-link'), { adjustments, updatedAt: serverTimestamp() }))
+    await assertFails(updateDoc(doc(merchant, 'public_payment_links', 'fees-link'), { adjustments, title: 'Cambio no autorizado', updatedAt: serverTimestamp() }))
+    await assertFails(setDoc(feeSettings, {
+      perProduct: { enabled: true, mode: 'PERCENT', value: 101 },
+      perOrder: adjustments.perOrder,
+      updatedAt: serverTimestamp(),
+    }))
+  })
+
   it('allows a merchant to mark a verified order item delivered without changing its price', async () => {
     await seedUser('merchant-delivery', 'COMERCIANTE')
     await testEnv.withSecurityRulesDisabled(async (context) => {
@@ -122,7 +195,7 @@ describe('Firestore security rules', () => {
       })
     })
 
-    const db = googleUser('merchant-delivery').firestore()
+    const db = googleUser('merchant-delivery')
     const orderRef = doc(db, 'orders', 'delivery-order')
     await assertFails(updateDoc(orderRef, { deliveryStatus: 'DELIVERED' }))
     await assertSucceeds(updateDoc(orderRef, { deliveredItemIndexes: [0] }))
