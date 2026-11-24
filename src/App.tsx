@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import {
-  ArrowDownToLine, ArrowLeft, ArrowRight, BadgeCheck, Bell, Check, ChevronDown,
+  ArrowDownToLine, ArrowRight, BadgeCheck, Bell, Check, ChevronDown,
   CircleHelp, Clock3, FileDown, Link2, LogOut, Menu, PackageCheck, Plus, QrCode,
   ShieldCheck, Smartphone, Store, Truck, Wallet, X,
 } from 'lucide-react'
@@ -71,8 +71,8 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false)
   const [loginError, setLoginError] = useState('')
   const [loginBusy, setLoginBusy] = useState(false)
-  const [notice, setNotice] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (!auth) { setAuthReady(true); return }
@@ -90,8 +90,7 @@ export default function App() {
     try {
       const profile = await signInWithGoogle()
       setUser(profile)
-      setNotice(`Hola, ${profile.displayName.split(' ')[0]}. Tu espacio está listo.`)
-      window.setTimeout(() => setNotice(''), 4000)
+      navigate(homeForRole(profile.role), { replace: true })
     } catch (error) {
       setLoginError(error instanceof Error ? error.message : 'No pudimos iniciar sesión con Google.')
       window.setTimeout(() => setLoginError(''), 6000)
@@ -109,29 +108,31 @@ export default function App() {
   return <>
     <header className="topbar">
       <Link className="brand-lockup" to="/" aria-label="VeriPago inicio"><img src={brand} alt="VeriPago" /></Link>
-      <nav className={menuOpen ? 'nav-links open' : 'nav-links'}>
+      {!user && <nav className={menuOpen ? 'nav-links open' : 'nav-links'}>
         <a href="#como-funciona" onClick={() => setMenuOpen(false)}>Cómo funciona</a>
         <a href="#beneficios" onClick={() => setMenuOpen(false)}>Beneficios</a>
-        {user && <Link onClick={() => setMenuOpen(false)} to={homeForRole(user.role)}>Mi espacio</Link>}
-      </nav>
+      </nav>}
       <div className="top-actions">
         {user ? <div className="user-menu">
           <Link className="avatar-link" to={homeForRole(user.role)}><img src={user.photoUrl || brand} alt="" /><span>{user.displayName.split(' ')[0]}</span><ChevronDown size={15} /></Link>
           <button className="icon-button" title="Cerrar sesión" onClick={signOut}><LogOut size={17} /></button>
         </div> : <button className="button button-small button-light" onClick={startLogin} disabled={loginBusy || !isFirebaseConfigured}><GoogleMark /> {loginBusy ? 'Conectando con Google…' : 'Continuar con Google'} <ArrowRight size={15} /></button>}
-        <button className="menu-toggle" onClick={() => setMenuOpen(!menuOpen)} aria-label="Abrir menú">{menuOpen ? <X /> : <Menu />}</button>
+        {!user && <button className="menu-toggle" onClick={() => setMenuOpen(!menuOpen)} aria-label="Abrir menú">{menuOpen ? <X /> : <Menu />}</button>}
       </div>
     </header>
 
-    {notice && <div className="toast"><Check size={16} />{notice}</div>}
     {loginError && <div className="toast toast-error" role="alert"><X size={16} />{loginError}</div>}
     {!authReady ? <main className="loading-screen"><span className="spinner" />Cargando tu espacio</main> :
       <Routes>
-        <Route path="/" element={<Landing user={user} onLogin={startLogin} />} />
-        <Route path="/comercio/*" element={user?.role === 'COMERCIANTE' ? <MerchantDashboard user={user} /> : <AccessGate user={user} openLogin={startLogin} />} />
+        <Route path="/" element={user ? <Navigate to={homeForRole(user.role)} replace /> : <Landing onLogin={startLogin} />} />
+        <Route path="/comercio/*" element={user?.role === 'COMERCIANTE'
+          ? <MerchantDashboard user={user} />
+          : user?.role === 'ADMINISTRADOR' ? <Navigate to="/admin" replace /> : <AccessGate user={user} openLogin={startLogin} />} />
         <Route path="/mi-cuenta/*" element={<Navigate to="/" replace />} />
-        <Route path="/admin/*" element={user?.role === 'ADMINISTRADOR' ? <AdminDashboard user={user} /> : <AccessGate user={user} openLogin={startLogin} />} />
-        <Route path="/:slug" element={<PublicCheckout />} />
+        <Route path="/admin/*" element={user?.role === 'ADMINISTRADOR'
+          ? <AdminDashboard user={user} />
+          : user?.role === 'COMERCIANTE' ? <Navigate to="/comercio" replace /> : <AccessGate user={user} openLogin={startLogin} />} />
+        <Route path="/:slug" element={user ? <Navigate to={homeForRole(user.role)} replace /> : <PublicCheckout />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>}
 
@@ -143,7 +144,7 @@ function homeForRole(role: Role) {
   return role === 'COMERCIANTE' ? '/comercio' : '/admin'
 }
 
-function Landing({ user, onLogin }: { user: UserProfile | null; onLogin: () => void }) {
+function Landing({ onLogin }: { onLogin: () => void }) {
   const [apkRelease, setApkRelease] = useState({ url: '', version: '' })
   const [apkMessage, setApkMessage] = useState('')
   useEffect(() => { getApkRelease().then(setApkRelease).catch(() => setApkMessage('La descarga estará disponible cuando el administrador publique la versión alfa.')) }, [])
@@ -154,8 +155,8 @@ function Landing({ user, onLogin }: { user: UserProfile | null; onLogin: () => v
         <h1>El pago llega.<br /><span>VeriPago lo confirma.</span></h1>
         <p className="hero-lead">Muestra tu QR, recibe en Nequi, Daviplata o Bre-B y sigue cada pedido desde un solo lugar. Sin comisiones y sin intermediarios.</p>
         <div className="hero-actions">
-          <button className="button button-primary" onClick={user ? undefined : onLogin}>
-            {user ? <Link className="button-inner-link" to={homeForRole(user.role)}>Ir a mi espacio <ArrowRight size={18} /></Link> : <>Empezar gratis <ArrowRight size={18} /></>}
+          <button className="button button-primary" onClick={onLogin}>
+            Empezar gratis <ArrowRight size={18} />
           </button>
           {apkRelease.url ? <a className="button button-outline" href={apkRelease.url} download><ArrowDownToLine size={17} /> Descargar app Android</a> : <button className="button button-outline" onClick={() => setApkMessage('La versión para Android estará disponible pronto.')}><Smartphone size={17} /> App Android</button>}
         </div>
@@ -471,8 +472,7 @@ function AdminDashboard({ user }: { user: UserProfile }) {
 }
 
 function DashboardShell({ user, eyebrow, title, subtitle, children }: { user: UserProfile; eyebrow: string; title: string; subtitle: string; children: React.ReactNode }) {
-  const navigate = useNavigate()
-  return <main className="dashboard-wrap"><div className="dashboard-back"><button onClick={() => navigate('/')}><ArrowLeft size={16} /> Volver a inicio</button><span className="role-chip"><span className="live-dot" />{roleNames[user.role]}</span></div><section className="dashboard-heading"><div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p>{subtitle}</p></div><div className="dashboard-user"><img src={user.photoUrl || brand} alt="" /><span><b>{user.displayName}</b><small>{user.email} · Google</small></span><ShieldCheck size={18} /></div></section>{children}</main>
+  return <main className="dashboard-wrap"><div className="dashboard-back"><span className="role-chip"><span className="live-dot" />{roleNames[user.role]}</span></div><section className="dashboard-heading"><div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p>{subtitle}</p></div><div className="dashboard-user"><img src={user.photoUrl || brand} alt="" /><span><b>{user.displayName}</b><small>{user.email} · Google</small></span><ShieldCheck size={18} /></div></section>{children}</main>
 }
 
 function Stat({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: 'green' | 'purple' | 'blue' }) {
