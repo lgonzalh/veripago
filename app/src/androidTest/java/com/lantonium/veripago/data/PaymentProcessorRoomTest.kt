@@ -91,6 +91,27 @@ class PaymentProcessorRoomTest {
         assertEquals(3, database.pendingSyncDao().nextBatch().size)
     }
 
+    @Test
+    fun deliveredProductIsStoredLocallyAndQueuedWithoutCompletingOrder() = runBlocking {
+        val receivedAt = 1_800_000_000_000L
+        database.orderDao().upsert(
+            order("order-delivery", "Ana Pérez", receivedAt).copy(
+                itemsJson = """[{"name":"Café","qty":1},{"name":"Pan","qty":2}]""",
+                paymentStatus = "VERIFIED_AUTO",
+            ),
+        )
+
+        processor.markItemDelivered("order-delivery", 0)
+
+        val saved = database.orderDao().observeMerchantOrders("merchant-1").first().single()
+        assertEquals("[0]", saved.deliveredItemIndexesJson)
+        assertEquals("PENDING_DELIVERY", saved.deliveryStatus)
+        val queued = database.pendingSyncDao().nextBatch().single()
+        assertEquals("orders", queued.entityName)
+        assertEquals("order-delivery", queued.entityId)
+        assertEquals("[0]", org.json.JSONObject(queued.payloadJson).getJSONArray("deliveredItemIndexes").toString())
+    }
+
     private fun rule() = BankRuleEntity(
         ruleId = "nequi",
         walletName = "Nequi",

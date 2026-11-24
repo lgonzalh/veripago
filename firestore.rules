@@ -41,6 +41,20 @@ service cloud.firestore {
         && ((data.priceIncludesVat && data.enteredPrice == data.priceWithVat)
           || (!data.priceIncludesVat && data.enteredPrice == data.priceWithoutVat));
     }
+    function validDeliveredItemProgress() {
+      return resource.data.paymentStatus in ['VERIFIED_AUTO', 'VERIFIED_MANUAL']
+        && request.resource.data.paymentStatus == resource.data.paymentStatus
+        && request.resource.data.deliveryStatus == resource.data.deliveryStatus
+        && resource.data.items is list
+        && request.resource.data.deliveredItemIndexes is list
+        && request.resource.data.deliveredItemIndexes.size() == resource.data.get('deliveredItemIndexes', []).size() + 1
+        && request.resource.data.deliveredItemIndexes.hasAll(resource.data.get('deliveredItemIndexes', []))
+        && request.resource.data.deliveredItemIndexes.toSet().size() == request.resource.data.deliveredItemIndexes.size()
+        && request.resource.data.deliveredItemIndexes.size() <= resource.data.items.size()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'deliveredItemIndexes', 'localUpdatedAt', 'serverUpdatedAt'
+        ]);
+    }
     match /users/{uid} {
       allow get: if signedInWithGoogle() && (request.auth.uid == uid || isAdmin());
       allow list: if isAdmin();
@@ -119,10 +133,11 @@ service cloud.firestore {
       allow update: if isAdmin()
         || (signedInWithGoogle() && isMerchant(resource.data.merchantId)
           && request.resource.data.merchantId == resource.data.merchantId
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'senderAccountName', 'paymentStatus', 'deliveryStatus',
-            'matchedNotificationId', 'localUpdatedAt', 'serverUpdatedAt'
-          ]));
+          && (validDeliveredItemProgress()
+            || request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'senderAccountName', 'paymentStatus', 'deliveryStatus',
+              'matchedNotificationId', 'localUpdatedAt', 'serverUpdatedAt'
+            ])));
       allow delete: if isAdmin();
     }
 

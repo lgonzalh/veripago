@@ -400,6 +400,7 @@ export const createCheckoutOrder = onCall({ region, enforceAppCheck: false }, as
       paymentProvider: selectedMethod.provider,
       paymentStatus: 'PENDING',
       deliveryStatus: 'PENDING_DELIVERY',
+      deliveredItemIndexes: [],
       matchedNotificationId: null,
       createdAt: now,
       localUpdatedAt: now,

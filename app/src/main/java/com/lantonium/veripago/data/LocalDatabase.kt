@@ -11,6 +11,8 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "orders")
@@ -29,6 +31,7 @@ data class OrderEntity(
     val matchedNotificationId: String?,
     val createdAt: Long,
     val updatedAt: Long,
+    val deliveredItemIndexesJson: String = "[]",
 )
 
 @Entity(
@@ -86,11 +89,17 @@ interface OrderDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(orders: List<OrderEntity>)
 
+    @Query("SELECT * FROM orders WHERE orderId = :orderId LIMIT 1")
+    suspend fun getById(orderId: String): OrderEntity?
+
     @Query("UPDATE orders SET paymentStatus = :status, matchedNotificationId = :notificationId, updatedAt = :updatedAt WHERE orderId = :orderId AND paymentStatus = 'PENDING'")
     suspend fun markPaid(orderId: String, status: String, notificationId: String, updatedAt: Long): Int
 
     @Query("UPDATE orders SET deliveryStatus = 'DELIVERED', updatedAt = :updatedAt WHERE orderId = :orderId")
     suspend fun markDelivered(orderId: String, updatedAt: Long)
+
+    @Query("UPDATE orders SET deliveredItemIndexesJson = :indexesJson, updatedAt = :updatedAt WHERE orderId = :orderId")
+    suspend fun updateDeliveredItemIndexes(orderId: String, indexesJson: String, updatedAt: Long)
 }
 
 @Dao
@@ -137,7 +146,7 @@ interface PendingSyncDao {
 
 @Database(
     entities = [OrderEntity::class, CapturedNotificationEntity::class, BankRuleEntity::class, PendingSyncEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class VeriPagoDatabase : RoomDatabase() {
@@ -147,9 +156,16 @@ abstract class VeriPagoDatabase : RoomDatabase() {
     abstract fun pendingSyncDao(): PendingSyncDao
 
     companion object {
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE orders ADD COLUMN deliveredItemIndexesJson TEXT NOT NULL DEFAULT '[]'")
+            }
+        }
+
         @Volatile private var INSTANCE: VeriPagoDatabase? = null
         fun get(context: Context): VeriPagoDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context.applicationContext, VeriPagoDatabase::class.java, "veripago.db")
+                .addMigrations(MIGRATION_1_2)
                 .build().also { INSTANCE = it }
         }
     }

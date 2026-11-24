@@ -1395,9 +1395,9 @@ private fun OrdersScreen(profile: UserProfile, demoOrders: List<OrderEntity>, on
         if (orders.isEmpty()) EmptyCard("Tus pedidos aparecerán aquí al sincronizar con Firestore.")
         else LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
             items(orders, key = { it.orderId }) { order ->
-                OrderCard(order, onDelivered = if (profile.role == "COMERCIANTE") ({
+                OrderCard(order, onItemDelivered = if (profile.role == "COMERCIANTE") ({ index ->
                     if (isDemo) onDemoOrdersChange(demoOrders.map { if (it.orderId == order.orderId) it.copy(deliveryStatus = "DELIVERED") else it })
-                    else scope.launch { AppGraph.payments.markDelivered(order.orderId); PendingSyncScheduler.request(context) }
+                    else scope.launch { AppGraph.payments.markItemDelivered(order.orderId, index); PendingSyncScheduler.request(context) }
                 }) else null)
             }
         }
@@ -1814,12 +1814,30 @@ private fun CompactOrder(order: OrderEntity) {
 }
 
 @Composable
-private fun OrderCard(order: OrderEntity, onDelivered: (() -> Unit)?) {
+private fun OrderCard(order: OrderEntity, onItemDelivered: ((Int) -> Unit)?) {
+    val items = runCatching {
+        val json = org.json.JSONArray(order.itemsJson)
+        (0 until json.length()).mapNotNull { index -> json.optJSONObject(index)?.let { it.optString("name", "Producto") to it.optInt("qty", 1) } }
+    }.getOrDefault(emptyList())
+    val deliveredIndexes = runCatching {
+        val json = org.json.JSONArray(order.deliveredItemIndexesJson)
+        (0 until json.length()).mapNotNull { index -> json.optInt(index, -1).takeIf { it >= 0 } }.toSet()
+    }.getOrDefault(emptySet())
     Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(order.orderCode, color = Navy, fontWeight = FontWeight.Bold, fontSize = 12.sp); Text(order.customerName.ifBlank { "Cliente" }, color = Muted, fontSize = 10.sp) }; Text(formatCop(order.totalAmount), color = Navy, fontWeight = FontWeight.Bold, fontSize = 14.sp) }
             Spacer(Modifier.height(8.dp)); Text(if (order.paymentStatus.startsWith("VERIFIED")) "Pago verificado" else "Pago pendiente", color = if (order.paymentStatus.startsWith("VERIFIED")) Green else Color(0xFFAA7A31), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-            if (onDelivered != null && order.paymentStatus.startsWith("VERIFIED") && order.deliveryStatus != "DELIVERED") TextButton(onClick = onDelivered, modifier = Modifier.align(Alignment.End)) { Text("Marcar entregado") }
+            items.forEachIndexed { index, (name, quantity) ->
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Checkbox(
+                        checked = index in deliveredIndexes,
+                        onCheckedChange = { checked -> if (checked) onItemDelivered?.invoke(index) },
+                        enabled = onItemDelivered != null && order.paymentStatus.startsWith("VERIFIED") && index !in deliveredIndexes,
+                    )
+                    Text("$name × $quantity", color = Navy, fontSize = 10.sp, modifier = Modifier.weight(1f))
+                    Text(if (index in deliveredIndexes) "Entregado" else "Pendiente", color = if (index in deliveredIndexes) Green else Muted, fontSize = 9.sp)
+                }
+            }
             if (order.deliveryStatus == "DELIVERED") Text("Entregado", color = Green, fontSize = 9.sp)
         }
     }

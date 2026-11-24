@@ -91,6 +91,9 @@ class FirestoreSyncManager(private val database: VeriPagoDatabase) {
         val merchantId = getString("merchantId") ?: return null
         val itemList = get("items") as? List<*> ?: emptyList<Any>()
         val itemsJson = JSONArray(itemList.mapNotNull { it as? Map<*, *> }).toString()
+        val deliveredItemIndexesJson = JSONArray(
+            ((get("deliveredItemIndexes") as? List<*>) ?: emptyList<Any>()).mapNotNull { (it as? Number)?.toInt() },
+        ).toString()
         val createdAt = (get("createdAt") as? Timestamp)?.toDate()?.time ?: System.currentTimeMillis()
         return OrderEntity(
             orderId = id,
@@ -107,12 +110,15 @@ class FirestoreSyncManager(private val database: VeriPagoDatabase) {
             matchedNotificationId = getString("matchedNotificationId"),
             createdAt = createdAt,
             updatedAt = (get("serverUpdatedAt") as? Timestamp)?.toDate()?.time ?: createdAt,
+            deliveredItemIndexesJson = deliveredItemIndexesJson,
         )
     }
 
     private fun org.json.JSONObject.toMap(): Map<String, Any?> = keys().asSequence().associateWith { key ->
         when (val value = get(key)) {
             org.json.JSONObject.NULL -> null
+            is org.json.JSONObject -> value.toMap()
+            is JSONArray -> (0 until value.length()).map { index -> value.get(index) }
             else -> value
         }
     }

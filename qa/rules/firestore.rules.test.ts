@@ -22,6 +22,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   Timestamp,
 } from 'firebase/firestore'
 import { getBytes, ref, uploadBytes } from 'firebase/storage'
@@ -103,6 +104,25 @@ describe('Firestore security rules', () => {
     await assertSucceeds(setDoc(doc(db, 'orders', 'own-order'), order))
     await assertFails(setDoc(doc(db, 'orders', 'other-order'), { ...order, merchantId: 'merchant-2' }))
     await assertFails(setDoc(doc(db, 'orders', 'paid-order'), { ...order, paymentStatus: 'VERIFIED_AUTO' }))
+  })
+
+  it('allows a merchant to mark a verified order item delivered without changing its price', async () => {
+    await seedUser('merchant-delivery', 'COMERCIANTE')
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'orders', 'delivery-order'), {
+        merchantId: 'merchant-delivery',
+        paymentStatus: 'VERIFIED_AUTO',
+        deliveryStatus: 'PENDING_DELIVERY',
+        items: [{ name: 'Café', qty: 1, unitPrice: 5000, subtotal: 5000 }],
+        deliveredItemIndexes: [],
+        totalAmount: 5000,
+      })
+    })
+
+    const db = googleUser('merchant-delivery').firestore()
+    const orderRef = doc(db, 'orders', 'delivery-order')
+    await assertSucceeds(updateDoc(orderRef, { deliveredItemIndexes: [0] }))
+    await assertFails(updateDoc(orderRef, { deliveredItemIndexes: [0], totalAmount: 1 }))
   })
 
   it('keeps orders private and exposes only unexpired checkout sessions', async () => {

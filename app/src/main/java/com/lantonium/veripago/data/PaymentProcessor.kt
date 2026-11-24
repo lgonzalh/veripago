@@ -2,6 +2,7 @@ package com.lantonium.veripago.data
 
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
@@ -91,6 +92,34 @@ class PaymentProcessor(private val database: VeriPagoDatabase) {
                 entityId = orderId,
                 payloadJson = JSONObject(mapOf(
                     "deliveryStatus" to "DELIVERED",
+                    "localUpdatedAt" to now,
+                    "serverUpdatedAt" to "SERVER_TIMESTAMP",
+                )).toString(),
+                createdAt = now,
+            ))
+        }
+    }
+
+    suspend fun markItemDelivered(orderId: String, itemIndex: Int) {
+        val now = System.currentTimeMillis()
+        database.withTransaction {
+            val order = database.orderDao().getById(orderId) ?: error("No se encontró el pedido.")
+            if (!order.paymentStatus.startsWith("VERIFIED")) error("Solo puedes marcar productos de pedidos con pago verificado.")
+            val itemCount = JSONArray(order.itemsJson).length()
+            if (itemIndex !in 0 until itemCount) error("No se encontró el producto del pedido.")
+            val deliveredIndexes = JSONArray(order.deliveredItemIndexesJson)
+                .let { json -> (0 until json.length()).mapNotNull { index -> json.optInt(index, -1).takeIf { it >= 0 } }.toMutableSet() }
+            if (itemIndex in deliveredIndexes) return@withTransaction
+            deliveredIndexes += itemIndex
+            val updatedIndexes = deliveredIndexes.sorted()
+            val indexesJson = JSONArray(updatedIndexes).toString()
+            database.orderDao().updateDeliveredItemIndexes(orderId, indexesJson, now)
+            database.pendingSyncDao().enqueue(PendingSyncEntity(
+                operationId = "item-delivery-$orderId-$itemIndex-$now",
+                entityName = "orders",
+                entityId = orderId,
+                payloadJson = JSONObject(mapOf(
+                    "deliveredItemIndexes" to updatedIndexes,
                     "localUpdatedAt" to now,
                     "serverUpdatedAt" to "SERVER_TIMESTAMP",
                 )).toString(),
