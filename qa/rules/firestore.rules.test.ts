@@ -113,16 +113,23 @@ describe('Firestore security rules', () => {
         merchantId: 'merchant-delivery',
         paymentStatus: 'VERIFIED_AUTO',
         deliveryStatus: 'PENDING_DELIVERY',
-        items: [{ name: 'Café', qty: 1, unitPrice: 5000, subtotal: 5000 }],
+        items: [
+          { name: 'Café', qty: 1, unitPrice: 5000, subtotal: 5000 },
+          { name: 'Pan', qty: 1, unitPrice: 3000, subtotal: 3000 },
+        ],
         deliveredItemIndexes: [],
-        totalAmount: 5000,
+        totalAmount: 8000,
       })
     })
 
     const db = googleUser('merchant-delivery').firestore()
     const orderRef = doc(db, 'orders', 'delivery-order')
+    await assertFails(updateDoc(orderRef, { deliveryStatus: 'DELIVERED' }))
     await assertSucceeds(updateDoc(orderRef, { deliveredItemIndexes: [0] }))
-    await assertFails(updateDoc(orderRef, { deliveredItemIndexes: [0], totalAmount: 1 }))
+    await assertFails(updateDoc(orderRef, { deliveryStatus: 'DELIVERED' }))
+    await assertSucceeds(updateDoc(orderRef, { deliveredItemIndexes: [0, 1] }))
+    await assertFails(updateDoc(orderRef, { deliveredItemIndexes: [0, 1], totalAmount: 1 }))
+    await assertSucceeds(updateDoc(orderRef, { deliveryStatus: 'DELIVERED' }))
   })
 
   it('keeps orders private and exposes only unexpired checkout sessions', async () => {

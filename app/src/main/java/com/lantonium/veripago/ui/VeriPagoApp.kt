@@ -1395,10 +1395,25 @@ private fun OrdersScreen(profile: UserProfile, demoOrders: List<OrderEntity>, on
         if (orders.isEmpty()) EmptyCard("Tus pedidos aparecerán aquí al sincronizar con Firestore.")
         else LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
             items(orders, key = { it.orderId }) { order ->
-                OrderCard(order, onItemDelivered = if (profile.role == "COMERCIANTE") ({ index ->
-                    if (isDemo) onDemoOrdersChange(demoOrders.map { if (it.orderId == order.orderId) it.copy(deliveryStatus = "DELIVERED") else it })
-                    else scope.launch { AppGraph.payments.markItemDelivered(order.orderId, index); PendingSyncScheduler.request(context) }
-                }) else null)
+                OrderCard(
+                    order,
+                    onItemDelivered = if (profile.role == "COMERCIANTE") ({ index ->
+                        if (isDemo) onDemoOrdersChange(demoOrders.map {
+                            if (it.orderId == order.orderId) {
+                                val indexes = runCatching {
+                                    val json = org.json.JSONArray(it.deliveredItemIndexesJson)
+                                    (0 until json.length()).map { position -> json.optInt(position) }.toMutableSet()
+                                }.getOrDefault(mutableSetOf())
+                                indexes += index
+                                it.copy(deliveredItemIndexesJson = org.json.JSONArray(indexes.sorted()).toString())
+                            } else it
+                        }) else scope.launch { AppGraph.payments.markItemDelivered(order.orderId, index); PendingSyncScheduler.request(context) }
+                    }) else null,
+                    onOrderDelivered = if (profile.role == "COMERCIANTE") ({
+                        if (isDemo) onDemoOrdersChange(demoOrders.map { if (it.orderId == order.orderId) it.copy(deliveryStatus = "DELIVERED") else it })
+                        else scope.launch { AppGraph.payments.markDelivered(order.orderId); PendingSyncScheduler.request(context) }
+                    }) else null,
+                )
             }
         }
     }
@@ -1814,7 +1829,7 @@ private fun CompactOrder(order: OrderEntity) {
 }
 
 @Composable
-private fun OrderCard(order: OrderEntity, onItemDelivered: ((Int) -> Unit)?) {
+private fun OrderCard(order: OrderEntity, onItemDelivered: ((Int) -> Unit)?, onOrderDelivered: (() -> Unit)?) {
     val items = runCatching {
         val json = org.json.JSONArray(order.itemsJson)
         (0 until json.length()).mapNotNull { index -> json.optJSONObject(index)?.let { it.optString("name", "Producto") to it.optInt("qty", 1) } }
@@ -1823,6 +1838,7 @@ private fun OrderCard(order: OrderEntity, onItemDelivered: ((Int) -> Unit)?) {
         val json = org.json.JSONArray(order.deliveredItemIndexesJson)
         (0 until json.length()).mapNotNull { index -> json.optInt(index, -1).takeIf { it >= 0 } }.toSet()
     }.getOrDefault(emptySet())
+    val allItemsDelivered = items.isNotEmpty() && items.indices.all { it in deliveredIndexes }
     Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(order.orderCode, color = Navy, fontWeight = FontWeight.Bold, fontSize = 12.sp); Text(order.customerName.ifBlank { "Cliente" }, color = Muted, fontSize = 10.sp) }; Text(formatCop(order.totalAmount), color = Navy, fontWeight = FontWeight.Bold, fontSize = 14.sp) }
@@ -1838,7 +1854,26 @@ private fun OrderCard(order: OrderEntity, onItemDelivered: ((Int) -> Unit)?) {
                     Text(if (index in deliveredIndexes) "Entregado" else "Pendiente", color = if (index in deliveredIndexes) Green else Muted, fontSize = 9.sp)
                 }
             }
-            if (order.deliveryStatus == "DELIVERED") Text("Entregado", color = Green, fontSize = 9.sp)
+            if (items.isEmpty()) {
+                Spacer(Modifier.height(5.dp))
+                Text("Este pedido no tiene productos detallados para confirmar la entrega.", color = Muted, fontSize = 9.sp)
+            } else {
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Checkbox(
+                        checked = order.deliveryStatus == "DELIVERED",
+                        onCheckedChange = { checked -> if (checked) onOrderDelivered?.invoke() },
+                        enabled = onOrderDelivered != null && order.paymentStatus.startsWith("VERIFIED") && allItemsDelivered && order.deliveryStatus != "DELIVERED",
+                    )
+                    Text(
+                        if (order.deliveryStatus == "DELIVERED") "Pedido entregado" else "Marcar pedido completo como entregado",
+                        color = if (order.deliveryStatus == "DELIVERED") Green else Navy,
+                        fontSize = 10.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text("${deliveredIndexes.intersect(items.indices.toSet()).size}/${items.size}", color = Muted, fontSize = 9.sp)
+                }
+            }
         }
     }
 }

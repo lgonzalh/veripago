@@ -55,6 +55,20 @@ service cloud.firestore {
           'deliveredItemIndexes', 'localUpdatedAt', 'serverUpdatedAt'
         ]);
     }
+    function validOrderDeliveryCompletion() {
+      return resource.data.paymentStatus in ['VERIFIED_AUTO', 'VERIFIED_MANUAL']
+        && request.resource.data.paymentStatus == resource.data.paymentStatus
+        && request.resource.data.deliveryStatus == 'DELIVERED'
+        && resource.data.items is list
+        && resource.data.items.size() > 0
+        && resource.data.get('deliveredItemIndexes', []) is list
+        && resource.data.get('deliveredItemIndexes', []).size() == resource.data.items.size()
+        && resource.data.get('deliveredItemIndexes', []).toSet().size() == resource.data.items.size()
+        && request.resource.data.get('deliveredItemIndexes', []) == resource.data.get('deliveredItemIndexes', [])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'deliveryStatus', 'localUpdatedAt', 'serverUpdatedAt'
+        ]);
+    }
     match /users/{uid} {
       allow get: if signedInWithGoogle() && (request.auth.uid == uid || isAdmin());
       allow list: if isAdmin();
@@ -134,8 +148,9 @@ service cloud.firestore {
         || (signedInWithGoogle() && isMerchant(resource.data.merchantId)
           && request.resource.data.merchantId == resource.data.merchantId
           && (validDeliveredItemProgress()
+            || validOrderDeliveryCompletion()
             || request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              'senderAccountName', 'paymentStatus', 'deliveryStatus',
+              'senderAccountName', 'paymentStatus',
               'matchedNotificationId', 'localUpdatedAt', 'serverUpdatedAt'
             ])));
       allow delete: if isAdmin();

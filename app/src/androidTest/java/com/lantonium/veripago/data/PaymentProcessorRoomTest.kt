@@ -112,6 +112,27 @@ class PaymentProcessorRoomTest {
         assertEquals("[0]", org.json.JSONObject(queued.payloadJson).getJSONArray("deliveredItemIndexes").toString())
     }
 
+    @Test
+    fun orderCannotBeClosedUntilAllProductsAreDelivered() = runBlocking {
+        val receivedAt = 1_800_000_000_000L
+        database.orderDao().upsert(
+            order("order-completion", "Ana Pérez", receivedAt).copy(
+                itemsJson = """[{"name":"Café","qty":1},{"name":"Pan","qty":2}]""",
+                deliveredItemIndexesJson = "[0]",
+                paymentStatus = "VERIFIED_AUTO",
+            ),
+        )
+
+        val earlyCompletion = runCatching { processor.markDelivered("order-completion") }
+        assertEquals(true, earlyCompletion.isFailure)
+        assertEquals("PENDING_DELIVERY", database.orderDao().observeMerchantOrders("merchant-1").first().single().deliveryStatus)
+
+        database.orderDao().updateDeliveredItemIndexes("order-completion", "[0,1]", receivedAt + 1)
+        processor.markDelivered("order-completion")
+
+        assertEquals("DELIVERED", database.orderDao().observeMerchantOrders("merchant-1").first().single().deliveryStatus)
+    }
+
     private fun rule() = BankRuleEntity(
         ruleId = "nequi",
         walletName = "Nequi",

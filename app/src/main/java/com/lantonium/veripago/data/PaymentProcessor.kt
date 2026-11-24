@@ -85,6 +85,15 @@ class PaymentProcessor(private val database: VeriPagoDatabase) {
     suspend fun markDelivered(orderId: String) {
         val now = System.currentTimeMillis()
         database.withTransaction {
+            val order = database.orderDao().getById(orderId) ?: error("No se encontró el pedido.")
+            if (!order.paymentStatus.startsWith("VERIFIED")) error("Solo puedes cerrar pedidos con pago verificado.")
+            val itemCount = JSONArray(order.itemsJson).length()
+            val deliveredIndexes = JSONArray(order.deliveredItemIndexesJson)
+                .let { json -> (0 until json.length()).mapNotNull { index -> json.optInt(index, -1).takeIf { it >= 0 } }.toSet() }
+            if (itemCount == 0 || !(0 until itemCount).all { it in deliveredIndexes }) {
+                error("Marca cada producto como entregado antes de cerrar el pedido.")
+            }
+            if (order.deliveryStatus == "DELIVERED") return@withTransaction
             database.orderDao().markDelivered(orderId, now)
             database.pendingSyncDao().enqueue(PendingSyncEntity(
                 operationId = "delivery-$orderId-$now",
