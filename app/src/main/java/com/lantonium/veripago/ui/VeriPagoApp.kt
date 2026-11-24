@@ -332,8 +332,8 @@ fun VeriPagoApp(activity: Activity) {
                 val authRepo = GoogleAuthRepository(context, AppGraph.profileCache)
                 profile = authRepo.signIn(token)
                 error = ""
+                if (profile?.role == "COMERCIANTE") requestPaymentListenerAccess(context)
                 snackbar.showSnackbar("Hola, ${profile?.displayName?.substringBefore(' ')}. Tu espacio está listo.")
-                if (profile?.role == "COMERCIANTE") startPaymentListener(context)
             } catch (exception: GetCredentialCancellationException) {
                 error = "Se canceló el inicio de sesión con Google."
             } catch (exception: NoCredentialException) {
@@ -424,7 +424,7 @@ fun VeriPagoApp(activity: Activity) {
             if (profile != null && currentRoute != "acerca") {
                 NavigationBar(containerColor = Color.White) {
                     val entries = when (profile?.role) {
-                        "COMERCIANTE" -> listOf("inicio" to "Cobrar", "pedidos" to "Pedidos", "estado" to "Celular")
+                        "COMERCIANTE" -> listOf("inicio" to "Cobrar", "pedidos" to "Pedidos", "perfil" to "Perfil")
                         "ADMINISTRADOR" -> listOf(
                             "inicio" to "Resumen",
                             "reglas" to "Reglas Regex",
@@ -441,6 +441,7 @@ fun VeriPagoApp(activity: Activity) {
                             icon = {
                                 val icon = when (route) {
                                     "pedidos" -> Icons.Default.CheckCircle
+                                    "perfil" -> Icons.Default.AccountCircle
                                     "reglas" -> Icons.Default.NotificationsActive
                                     "usuarios" -> Icons.Default.AccountCircle
                                     "plataforma" -> Icons.Default.Storefront
@@ -1891,5 +1892,18 @@ private fun startPaymentListener(context: android.content.Context) {
     val enabled = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners").orEmpty()
     if (enabled.contains(context.packageName)) {
         androidx.core.content.ContextCompat.startForegroundService(context, Intent(context, PaymentMonitorService::class.java))
+    }
+}
+
+private fun requestPaymentListenerAccess(context: android.content.Context) {
+    val enabled = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners").orEmpty()
+    if (enabled.contains(context.packageName)) {
+        startPaymentListener(context)
+        return
+    }
+    runCatching {
+        context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+    }.onFailure {
+        // The user can still grant this later from Android settings.
     }
 }
