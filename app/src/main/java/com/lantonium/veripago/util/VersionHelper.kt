@@ -9,17 +9,32 @@ object VersionHelper {
         "sigma", "tau", "upsilon", "phi", "chi", "psi", "omega",
     )
     private val latinLetters = ('a'..'z').map(Char::toString)
+    private val greekGods = listOf(
+        "Zeus", "Hera", "Poseidon", "Demeter", "Athena", "Apollo",
+        "Artemis", "Ares", "Aphrodite", "Hephaestus", "Hermes", "Dionysus",
+    )
+    private val romanGods = listOf(
+        "Jupiter", "Juno", "Neptune", "Ceres", "Minerva", "Mars",
+        "Venus", "Vulcan", "Mercury", "Vesta", "Bacchus", "Janus",
+    )
 
     fun getGreekVersionString(): String {
-        val buildIndex = (BuildConfig.VERSION_CODE - 1).coerceAtLeast(0)
-        val label = if (buildIndex < greekLetters.size) {
+        return "Ver 1.0 build ${getBuildLabel(BuildConfig.VERSION_CODE)}"
+    }
+
+    internal fun getBuildLabel(versionCode: Int): String {
+        val buildIndex = (versionCode.coerceAtLeast(1) - 1)
+        return if (buildIndex < greekLetters.size) {
             greekLetters[buildIndex]
-        } else {
+        } else if (buildIndex < greekLetters.size + latinLetters.size) {
             val latinIndex = buildIndex - greekLetters.size
-            val cycle = latinIndex / latinLetters.size + 1
-            val letter = latinLetters[latinIndex % latinLetters.size]
-            if (cycle == 1) letter else "$letter-$cycle"
+            latinLetters[latinIndex]
+        } else {
+            val gods = greekGods + romanGods
+            val godIndex = buildIndex - greekLetters.size - latinLetters.size
+            val god = gods[godIndex % gods.size]
+            val cycle = godIndex / gods.size + 1
+            if (cycle == 1) god else "$god-$cycle"
         }
-        return "Ver 1.0 build $label"
     }
 }
