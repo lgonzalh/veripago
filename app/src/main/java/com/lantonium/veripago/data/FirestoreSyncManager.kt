@@ -133,6 +133,7 @@ class FirestoreSyncManager(private val database: VeriPagoDatabase) {
         val firestore = FirebaseClients.firestore ?: return@withContext false
         val dao = database.pendingSyncDao()
         val batch = dao.nextBatch()
+        var allSynced = true
         for (operation in batch) {
             try {
                 val payload = JSONObject(operation.payloadJson)
@@ -155,12 +156,17 @@ class FirestoreSyncManager(private val database: VeriPagoDatabase) {
                     "merchant_qrs" -> uploadMerchantQr(firestore, payload)
                 }
                 dao.acknowledge(operation.operationId)
-            } catch (_: Exception) {
+            } catch (failure: Exception) {
                 dao.recordRetry(operation.operationId)
-                return@withContext false
+                allSynced = false
+                android.util.Log.w(
+                    "VeriPagoSync",
+                    "Pending ${operation.entityName} write will retry: ${failure.message}",
+                    failure,
+                )
             }
         }
-        true
+        allSynced
     }
 
     private suspend fun uploadMerchantSetting(firestore: com.google.firebase.firestore.FirebaseFirestore, payload: JSONObject) {
