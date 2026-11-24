@@ -638,6 +638,7 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
     var latestOrders by remember { mutableStateOf<List<OrderEntity>>(emptyList()) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val installedWalletApps = remember(profile.uid) { detectInstalledWalletApps(context) }
     val amount = (price.toLongOrNull() ?: 0L) * (quantity.toIntOrNull()?.coerceIn(1, 100) ?: 1)
     LaunchedEffect(profile.uid) {
         if (isDemo) {
@@ -656,14 +657,15 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
                 .whereEqualTo("defaultMode", "IN_SITU_QR").whereEqualTo("isActive", true).limit(1).get().await().documents.firstOrNull()
             if (link != null) {
                 configuredPaymentMethods = parsePaymentMethods(link)
-                if (configuredPaymentMethods.none { it.provider == selectedPaymentProvider }) {
-                    selectedPaymentProvider = configuredPaymentMethods.firstOrNull()?.provider ?: "NEQUI"
+                if (configuredPaymentMethods.none { it.provider == selectedPaymentProvider && isWalletProviderAvailable(it.provider, installedWalletApps) }) {
+                    selectedPaymentProvider = configuredPaymentMethods.firstOrNull { isWalletProviderAvailable(it.provider, installedWalletApps) }?.provider ?: "NEQUI"
                 }
             }
         }
         AppGraph.payments.observeOrders(profile.uid).collect { latestOrders = it }
     }
     val selectedPaymentMethod = configuredPaymentMethods.find { it.provider == selectedPaymentProvider }
+        ?.takeIf { isWalletProviderAvailable(it.provider, installedWalletApps) }
     val visibleOrders = if (isDemo) demoOrders else latestOrders
 
     LazyColumn(Modifier.fillMaxSize().background(Color(0xFFF5F7FA)).padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
@@ -700,18 +702,24 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                         (listOf("NEQUI", "DAVIPLATA", "BRE_B") + if (configuredPaymentMethods.any { it.provider == "OTHER" }) listOf("OTHER") else emptyList()).forEach { provider ->
                             val method = configuredPaymentMethods.find { it.provider == provider }
+                            val walletInstalled = isWalletProviderAvailable(provider, installedWalletApps)
                             Column(
                                 modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
                                     .background(if (selectedPaymentProvider == provider) Color(0xFFEAF2FF) else Color(0xFFF5F7FA))
-                                    .clickable(enabled = method != null) { selectedPaymentProvider = provider }
+                                    .clickable(enabled = method != null && walletInstalled) { selectedPaymentProvider = provider }
                                     .padding(vertical = 8.dp, horizontal = 4.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
                                 paymentProviderLogo(provider)?.let { Image(painterResource(it), contentDescription = paymentProviderNames[provider], modifier = Modifier.size(27.dp)) }
                                     ?: Icon(Icons.Default.QrCode2, contentDescription = paymentProviderNames[provider], tint = Muted, modifier = Modifier.size(27.dp))
-                                Text(paymentProviderNames[provider].orEmpty(), color = if (method != null) Navy else Muted, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+                                Text(paymentProviderNames[provider].orEmpty(), color = if (method != null && walletInstalled) Navy else Muted, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+                                if (!walletInstalled) Text("No instalada", color = Muted, fontSize = 7.sp)
+                                else if (method == null) Text("QR sin configurar", color = Muted, fontSize = 7.sp)
                             }
                         }
+                    }
+                    if (installedWalletApps.none { it == NEQUI_PACKAGE || it == DAVIPLATA_PACKAGE }) {
+                        Text("Instala Nequi o DaviPlata para habilitar estas billeteras y Bre-B.", color = Muted, fontSize = 9.sp)
                     }
                     if (configuredPaymentMethods.isEmpty()) Text("Configura tus QR de Nequi, DaviPlata o Bre-B desde VeriPago Web.", color = Muted, fontSize = 10.sp)
                     OutlinedTextField(
@@ -922,6 +930,22 @@ private fun normalizeWhatsappNumber(raw: String): String? {
         else -> return null
     }
     return "+$international"
+}
+
+private const val NEQUI_PACKAGE = "com.nequi.MobileApp"
+private const val DAVIPLATA_PACKAGE = "com.davivienda.daviplataapp"
+
+private fun detectInstalledWalletApps(context: android.content.Context): Set<String> =
+    setOf(NEQUI_PACKAGE, DAVIPLATA_PACKAGE).filterTo(mutableSetOf()) { packageName ->
+        runCatching { context.packageManager.getPackageInfo(packageName, 0) }.isSuccess
+    }
+
+private fun isWalletProviderAvailable(provider: String, installedApps: Set<String>): Boolean = when (provider) {
+    "NEQUI" -> NEQUI_PACKAGE in installedApps
+    "DAVIPLATA" -> DAVIPLATA_PACKAGE in installedApps
+    // Bre-B is a transfer rail available inside supported wallet apps, not a standalone app.
+    "BRE_B" -> NEQUI_PACKAGE in installedApps || DAVIPLATA_PACKAGE in installedApps
+    else -> true
 }
 
 private fun openWhatsAppShare(context: android.content.Context, phone: String, message: String) {
