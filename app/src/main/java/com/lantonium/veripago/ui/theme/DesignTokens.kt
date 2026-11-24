@@ -10,6 +10,8 @@ object DesignTokens {
     val cardCorner: Dp = 16.dp
     val controlCorner: Dp = 12.dp
     val controlHeight: Dp = 52.dp
+    val fieldHeight: Dp = 60.dp
     val outlineWidth: Dp = 1.dp
-    val contentText: TextUnit = 13.sp
+    val bodyText: TextUnit = 15.sp
+    val fieldLabel: TextUnit = 12.sp
 }

@@ -73,7 +73,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -111,7 +110,8 @@ import com.lantonium.veripago.ui.components.AppButton
 import com.lantonium.veripago.ui.components.AppCard
 import com.lantonium.veripago.ui.components.AppOutlinedButton
 import com.lantonium.veripago.ui.components.AppSegmentedSelector
-import com.lantonium.veripago.ui.components.AppTextField
+import com.lantonium.veripago.ui.components.VeriFixedTextField
+import com.lantonium.veripago.ui.components.VeriFixedSelector
 import com.lantonium.veripago.ui.components.SegmentOption
 import com.lantonium.veripago.ui.theme.DesignTokens
 import androidx.credentials.CredentialManager
@@ -444,9 +444,9 @@ fun VeriPagoApp(activity: Activity) {
                     )
                     Spacer(Modifier.width(9.dp))
                     Column {
-                        Text("VeriPago", color = Navy, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Text(VersionHelper.getGreekVersionString(), color = Muted, fontSize = 13.sp, maxLines = 1)
-                        Text("ECOSISTEMA DE VERIFICACIÓN DE PAGOS", color = Muted, fontSize = 13.sp, letterSpacing = 0.35.sp, maxLines = 1)
+                        Text("VeriPago", color = Navy, fontWeight = FontWeight.Bold, fontSize = DesignTokens.bodyText)
+                        Text(VersionHelper.getGreekVersionString(), color = Muted, fontSize = DesignTokens.bodyText, maxLines = 1)
+                        Text("ECOSISTEMA DE VERIFICACIÓN DE PAGOS", color = Muted, fontSize = DesignTokens.bodyText, letterSpacing = 0.35.sp, maxLines = 1)
                     }
                 } },
                 actions = {
@@ -527,7 +527,7 @@ fun VeriPagoApp(activity: Activity) {
                                 }
                                 Icon(icon, contentDescription = null)
                             },
-                            label = { Text(label, fontSize = 13.sp, maxLines = 1) },
+                            label = { Text(label, fontSize = DesignTokens.bodyText, maxLines = 1) },
                         )
                     }
                 }
@@ -545,7 +545,7 @@ fun VeriPagoApp(activity: Activity) {
                     modifier = Modifier.align(Alignment.Center).offset(y = 98.dp)
                         .background(Color(0xFF071A32)).padding(horizontal = 6.dp, vertical = 1.dp),
                     color = Color.White,
-                    fontSize = 13.sp,
+                    fontSize = DesignTokens.bodyText,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                 )
@@ -665,11 +665,11 @@ private fun VeriPagoAnimatedSplash(modifier: Modifier) {
 private fun LandingScreen(modifier: Modifier, configured: Boolean, error: String, onLogin: () -> Unit, onRegister: () -> Unit) {
     Column(modifier.fillMaxSize().background(Color(0xFFF5F7FA))) {
         Column(Modifier.weight(1f).padding(horizontal = 24.dp).padding(top = 34.dp), verticalArrangement = Arrangement.Center) {
-            Text("COBRA DIRECTO. CONFIRMA AL INSTANTE.", color = Green, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
+            Text("COBRA DIRECTO. CONFIRMA AL INSTANTE.", color = Green, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
             Spacer(Modifier.height(16.dp))
-            Text("El pago llega.\nVeriPago lo confirma en voz alta.", color = Navy, fontSize = 32.sp, lineHeight = 37.sp, fontWeight = FontWeight.Bold)
+            Text("El pago llega.\nVeriPago lo confirma en voz alta.", color = Navy, fontSize = DesignTokens.bodyText, lineHeight = 20.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(13.dp))
-            Text("Muestra tu QR, o envía un link por Whatsapp y recibe en Nequi, Daviplata o Bre-B para verificar el pago de cada pedido desde un solo lugar.", color = Muted, fontSize = 13.sp, lineHeight = 21.sp)
+            Text("Muestra tu QR, o envía un link por Whatsapp y recibe en Nequi, Daviplata o Bre-B para verificar el pago de cada pedido desde un solo lugar.", color = Muted, fontSize = DesignTokens.bodyText, lineHeight = 20.sp)
             Spacer(Modifier.height(24.dp))
             FeatureLine(Icons.Default.QrCode2, "Cobra con QR o comparte por WhatsApp")
             FeatureLine(Icons.Default.VolumeUp, "Escucha la confirmación del pago")
@@ -681,8 +681,8 @@ private fun LandingScreen(modifier: Modifier, configured: Boolean, error: String
                 Spacer(Modifier.width(9.dp))
                 Text("Continuar con Google", fontWeight = FontWeight.SemiBold)
             }
-            if (error.isNotBlank()) Text(error, color = Color(0xFFB44743), fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-            if (!configured) Text("Configura Google Sign-In en Firebase para habilitar el acceso.", color = Muted, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            if (error.isNotBlank()) Text(error, color = Color(0xFFB44743), fontSize = DesignTokens.bodyText, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            if (!configured) Text("Configura Google Sign-In en Firebase para habilitar el acceso.", color = Muted, fontSize = DesignTokens.bodyText, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             TextButton(onClick = onRegister, modifier = Modifier.fillMaxWidth()) { Text("Registrar perfil de comerciante en la web") }
         }
     }
@@ -694,7 +694,7 @@ private fun FeatureLine(icon: androidx.compose.ui.graphics.vector.ImageVector, l
         Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFFEAF4FF)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = Color(0xFF3578D8), modifier = Modifier.size(18.dp))
         }
-        Spacer(Modifier.width(10.dp)); Text(label, color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.width(10.dp)); Text(label, color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -764,14 +764,14 @@ private fun ProfileScreen(profile: UserProfile) {
                         AsyncImage(profile.photoUrl, contentDescription = "Foto de ${profile.displayName}", modifier = Modifier.size(46.dp).clip(CircleShape), contentScale = ContentScale.Crop)
                     } else {
                         Box(Modifier.size(46.dp).clip(CircleShape).background(Navy), contentAlignment = Alignment.Center) {
-                            Text(profile.displayName.firstOrNull()?.uppercase() ?: "G", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                            Text(profile.displayName.firstOrNull()?.uppercase() ?: "G", color = Color.White, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold)
                         }
                     }
                     Spacer(Modifier.width(10.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                        Text(profile.displayName.ifBlank { "Usuario de Google" }, color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                        Text(profile.email, color = Muted, fontSize = 13.sp, maxLines = 1)
-                        Text(if (profile.role == "ADMINISTRADOR") "Administrador" else "Comerciante", color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        Text(profile.displayName.ifBlank { "Usuario de Google" }, color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text(profile.email, color = Muted, fontSize = DesignTokens.bodyText, maxLines = 1)
+                        Text(if (profile.role == "ADMINISTRADOR") "Administrador" else "Comerciante", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Medium)
                     }
                 }
             }
@@ -779,12 +779,12 @@ private fun ProfileScreen(profile: UserProfile) {
         if (profile.role == "COMERCIANTE") {
             AppCard {
                 Column(Modifier.fillMaxWidth().padding(if (keyboardVisible) 8.dp else 10.dp), verticalArrangement = Arrangement.spacedBy(if (keyboardVisible) 4.dp else 6.dp)) {
-                    Text("WhatsApp del comercio", color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text("WhatsApp del comercio", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold, maxLines = 1)
                     if (isDemo) {
-                        Text("En la prueba no se guarda ni se publica ningún número.", color = Color(0xFFB54743), fontSize = 13.sp)
+                        Text("En la prueba no se guarda ni se publica ningún número.", color = Color(0xFFB54743), fontSize = DesignTokens.bodyText)
                     } else {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            AppTextField(
+                            VeriFixedTextField(
                                 value = whatsappDraft,
                                 onValueChange = { whatsappDraft = it.take(20); contactMessage = "" },
                                 label = "Número del comerciante",
@@ -814,16 +814,16 @@ private fun ProfileScreen(profile: UserProfile) {
                                     }
                                 },
                                 modifier = Modifier,
-                            ) { Text(if (loadingContact) "…" else if (savingContact) "…" else "Guardar", fontSize = 13.sp) }
+                            ) { Text(if (loadingContact) "…" else if (savingContact) "…" else "Guardar", fontSize = DesignTokens.bodyText) }
                         }
-                        if (contactMessage.isNotBlank()) Text(contactMessage, color = if (contactMessage.startsWith("No se pudo") || contactMessage.startsWith("Ingresa")) Color(0xFFB54743) else Green, fontSize = 13.sp, maxLines = 1)
+                        if (contactMessage.isNotBlank()) Text(contactMessage, color = if (contactMessage.startsWith("No se pudo") || contactMessage.startsWith("Ingresa")) Color(0xFFB54743) else Green, fontSize = DesignTokens.bodyText, maxLines = 1)
                     }
                 }
             }
             if (!keyboardVisible) AppCard {
                 Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Códigos QR", color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        Text("Códigos QR", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                         if (loadingContact) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -847,12 +847,12 @@ private fun ProfileScreen(profile: UserProfile) {
                                     enabled = !isDemo && uploadingQrProvider.isBlank(),
                                     onClick = { pendingQrProvider = provider; qrPicker.launch(arrayOf("image/png", "image/jpeg", "image/webp")) },
                                     modifier = Modifier.fillMaxWidth(),
-                                ) { Text(if (method == null) "Cargar" else "Cambiar", fontSize = DesignTokens.contentText, maxLines = 1) }
+                                ) { Text(if (method == null) "Cargar" else "Cambiar", fontSize = DesignTokens.bodyText, maxLines = 1) }
                             }
                         }
                     }
-                    if (qrMessage.isNotBlank()) Text(qrMessage, color = if (qrMessageIsError) Color(0xFFB54743) else Green, fontSize = 13.sp, maxLines = 2)
-                    if (isDemo) Text("La carga está disponible en tu cuenta de comerciante.", color = Muted, fontSize = 13.sp, maxLines = 1)
+                    if (qrMessage.isNotBlank()) Text(qrMessage, color = if (qrMessageIsError) Color(0xFFB54743) else Green, fontSize = DesignTokens.bodyText, maxLines = 2)
+                    if (isDemo) Text("La carga está disponible en tu cuenta de comerciante.", color = Muted, fontSize = DesignTokens.bodyText, maxLines = 1)
                 }
             }
         }
@@ -890,14 +890,14 @@ private fun AdjustmentEditor(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = enabled, onCheckedChange = onEnabledChange, modifier = Modifier.size(28.dp))
             Spacer(Modifier.width(3.dp))
-            Text(title, color = Navy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(title, color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
         AppSegmentedSelector(
             options = listOf(SegmentOption("FIXED", "\$"), SegmentOption("PERCENT", "%")),
             selected = mode,
             onSelected = onModeChange,
         )
-        AppTextField(
+        VeriFixedTextField(
             value = value,
             onValueChange = { input -> onValueChange(input.filter { it.isDigit() || (mode == "PERCENT" && (it == '.' || it == ',')) }.take(12)) },
             placeholder = if (mode == "FIXED") "Valor \$" else "Porcentaje",
@@ -990,7 +990,6 @@ private fun MerchantScreen(
     val keyboardVisible = rememberKeyboardVisible()
     var activeChargeLineId by rememberSaveable(profile.uid) { mutableStateOf("") }
     var addProductMenuOpen by remember { mutableStateOf(false) }
-    var changeProductMenuOpen by remember { mutableStateOf(false) }
     val activeLine = chargeLines.firstOrNull { it.id == activeChargeLineId } ?: chargeLines.firstOrNull()
     val selectedPaymentMethod = configuredPaymentMethods.find { it.provider == selectedPaymentProvider }
         ?.takeIf { isWalletProviderAvailable(it.provider, installedWalletApps) }
@@ -1008,9 +1007,9 @@ private fun MerchantScreen(
     ) {
         if (!compactCharge) {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Tu negocio, en orden.", color = Navy, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                Text("Cobra y verifica cada pedido.", color = Muted, fontSize = DesignTokens.contentText, maxLines = 1)
-                Text("${visibleOrders.count { it.paymentStatus.startsWith("VERIFIED") }} verificados · ${visibleOrders.count { it.paymentStatus == "PENDING" }} pendientes", color = Muted, fontSize = DesignTokens.contentText, maxLines = 1)
+                Text("Tu negocio, en orden.", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text("Cobra y verifica cada pedido.", color = Muted, fontSize = DesignTokens.bodyText, maxLines = 1)
+                Text("${visibleOrders.count { it.paymentStatus.startsWith("VERIFIED") }} verificados · ${visibleOrders.count { it.paymentStatus == "PENDING" }} pendientes", color = Muted, fontSize = DesignTokens.bodyText, maxLines = 1)
             }
         }
         AppCard(
@@ -1023,15 +1022,15 @@ private fun MerchantScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.QrCode2, null, tint = Color(0xFF3475D3), modifier = Modifier.size(19.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Cobro rápido", color = Navy, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text("Cobro rápido", color = Navy, fontWeight = FontWeight.Bold, fontSize = DesignTokens.bodyText)
                     Spacer(Modifier.weight(1f))
-                    if (!compactCharge) Text("QR o WhatsApp", color = Muted, fontSize = 13.sp)
+                    if (!compactCharge) Text("QR o WhatsApp", color = Muted, fontSize = DesignTokens.bodyText)
                 }
                 if (catalogLoadError.isNotBlank()) {
-                    Text(catalogLoadError, color = Color(0xFFB54743), fontSize = 13.sp, maxLines = 2)
+                    Text(catalogLoadError, color = Color(0xFFB54743), fontSize = DesignTokens.bodyText, maxLines = 2)
                 }
                 if (catalogProducts.isEmpty()) {
-                    Text("Agrega productos para preparar un cobro.", color = Muted, fontSize = 13.sp)
+                    Text("Agrega productos para preparar un cobro.", color = Muted, fontSize = DesignTokens.bodyText)
                     OutlinedButton(onClick = onOpenCatalog, modifier = Modifier.fillMaxWidth().height(40.dp)) {
                         Icon(Icons.Default.Storefront, null, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(6.dp)); Text("Abrir Productos")
                     }
@@ -1045,9 +1044,9 @@ private fun MerchantScreen(
                             chosenLines.forEachIndexed { index, line ->
                                 val selected = line.id == activeLine?.id
                                 if (selected) AppButton(onClick = { activeChargeLineId = line.id }) {
-                                    Text("${index + 1}. ${line.name} ×${line.quantityText}", fontSize = DesignTokens.contentText, maxLines = 1)
+                                    Text("${index + 1}. ${line.name} ×${line.quantityText}", fontSize = DesignTokens.bodyText, maxLines = 1)
                                 } else AppOutlinedButton(onClick = { activeChargeLineId = line.id }) {
-                                    Text("${index + 1}. ${line.name} ×${line.quantityText}", fontSize = DesignTokens.contentText, maxLines = 1)
+                                    Text("${index + 1}. ${line.name} ×${line.quantityText}", fontSize = DesignTokens.bodyText, maxLines = 1)
                                 }
                             }
                         }
@@ -1055,23 +1054,19 @@ private fun MerchantScreen(
                     activeLine?.let { line ->
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Box(Modifier.weight(1f)) {
-                                AppOutlinedButton(
-                                    onClick = { changeProductMenuOpen = true },
+                                VeriFixedSelector(
+                                    value = line.name,
+                                    options = catalogProducts,
+                                    optionText = { it.name },
+                                    onSelected = { product ->
+                                        updateChargeLine(line.id) { it.copy(name = product.name, unitPriceText = product.priceWithVat.toString(), catalogProductId = product.id) }
+                                    },
+                                    label = "Producto",
+                                    placeholder = "Selecciona un producto",
                                     modifier = Modifier.fillMaxWidth(),
-                                ) { Text(line.name.ifBlank { "Seleccionar producto" }, maxLines = 1, fontSize = 13.sp) }
-                                DropdownMenu(expanded = changeProductMenuOpen, onDismissRequest = { changeProductMenuOpen = false }) {
-                                    catalogProducts.forEach { product ->
-                                        DropdownMenuItem(
-                                            text = { Text(product.name, color = Navy, fontSize = 13.sp) },
-                                            onClick = {
-                                                updateChargeLine(line.id) { it.copy(name = product.name, unitPriceText = product.priceWithVat.toString(), catalogProductId = product.id) }
-                                                changeProductMenuOpen = false
-                                            },
-                                        )
-                                    }
-                                }
+                                )
                             }
-                            AppTextField(
+                            VeriFixedTextField(
                                 value = line.quantityText,
                                 onValueChange = { value -> updateChargeLine(line.id) { it.copy(quantityText = value.filter(Char::isDigit).take(3)) } },
                                 label = "Cantidad",
@@ -1079,13 +1074,13 @@ private fun MerchantScreen(
                                 modifier = Modifier.width(100.dp),
                             )
                             if (chargeLines.size > 1) IconButton(onClick = { chargeLines = chargeLines.filterNot { it.id == line.id } }, modifier = Modifier.size(34.dp)) {
-                                Text("×", color = Muted, fontSize = 21.sp)
+                                Text("×", color = Muted, fontSize = DesignTokens.bodyText)
                             }
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text("${formatCop(line.unitPriceText.toLongOrNull() ?: 0L)} c/u", color = Muted, fontSize = 13.sp)
+                            Text("${formatCop(line.unitPriceText.toLongOrNull() ?: 0L)} c/u", color = Muted, fontSize = DesignTokens.bodyText)
                             val lineTotal = adjustedUnitPrice(line.unitPriceText.toLongOrNull() ?: 0L, perProductAdjustment) * (line.quantityText.toIntOrNull()?.coerceIn(1, 100) ?: 1)
-                            Text("Subtotal ${formatCop(lineTotal)}", color = Navy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Subtotal ${formatCop(lineTotal)}", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.SemiBold)
                         }
                     }
                     Box {
@@ -1094,11 +1089,11 @@ private fun MerchantScreen(
                             onClick = { addProductMenuOpen = true },
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 0.dp),
                             modifier = Modifier.height(32.dp),
-                        ) { Text("＋ Agregar producto del catálogo", fontSize = 13.sp) }
+                        ) { Text("＋ Agregar producto del catálogo", fontSize = DesignTokens.bodyText) }
                         DropdownMenu(expanded = addProductMenuOpen, onDismissRequest = { addProductMenuOpen = false }) {
                             catalogProducts.forEach { product ->
                                 DropdownMenuItem(
-                                    text = { Text(product.name, color = Navy, fontSize = 13.sp) },
+                                    text = { Text(product.name, color = Navy, fontSize = DesignTokens.bodyText) },
                                     onClick = {
                                         val newLine = ChargeDraftLine(name = product.name, unitPriceText = product.priceWithVat.toString(), catalogProductId = product.id)
                                         chargeLines = chargeLines + newLine
@@ -1110,8 +1105,8 @@ private fun MerchantScreen(
                         }
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("Total", color = Muted, fontSize = 13.sp)
-                        Text(formatCop(amount), color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text("Total", color = Muted, fontSize = DesignTokens.bodyText)
+                        Text(formatCop(amount), color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold)
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         (listOf("NEQUI", "DAVIPLATA", "BRE_B") + if (configuredPaymentMethods.any { it.provider == "OTHER" }) listOf("OTHER") else emptyList()).forEach { provider ->
@@ -1132,9 +1127,9 @@ private fun MerchantScreen(
                         }
                     }
                     if (configuredPaymentMethods.isEmpty() && !compactCharge) {
-                        Text("Configura tus códigos QR desde Perfil.", color = Muted, fontSize = 13.sp, maxLines = 1)
+                        Text("Configura tus códigos QR desde Perfil.", color = Muted, fontSize = DesignTokens.bodyText, maxLines = 1)
                     }
-                    AppTextField(
+                    VeriFixedTextField(
                         value = customerWhatsapp,
                         onValueChange = { customerWhatsapp = it.take(20) },
                         label = "WhatsApp del cliente",
@@ -1171,7 +1166,7 @@ private fun MerchantScreen(
                             modifier = Modifier.weight(1f),
                         ) {
                             if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
-                            else { Icon(Icons.Default.QrCode2, null, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(4.dp)); Text("Mostrar QR", fontSize = 13.sp, maxLines = 1) }
+                            else { Icon(Icons.Default.QrCode2, null, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(4.dp)); Text("Mostrar QR", fontSize = DesignTokens.bodyText, maxLines = 1) }
                         }
                         AppOutlinedButton(
                             enabled = !busy && chargeIsValid,
@@ -1200,12 +1195,12 @@ private fun MerchantScreen(
                                 }
                             },
                             modifier = Modifier.weight(1f),
-                        ) { Icon(Icons.Default.Link, null, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(4.dp)); Text("WhatsApp", fontSize = 13.sp, maxLines = 1) }
+                        ) { Icon(Icons.Default.Link, null, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(4.dp)); Text("WhatsApp", fontSize = DesignTokens.bodyText, maxLines = 1) }
                     }
                     if (!compactCharge) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.CheckCircle, null, tint = Green, modifier = Modifier.size(13.dp)); Spacer(Modifier.width(5.dp))
-                            Text("Directo a tu billetera · 0% comisión", color = Muted, fontSize = DesignTokens.contentText, lineHeight = 17.sp, maxLines = 2, modifier = Modifier.weight(1f))
+                            Text("Directo a tu billetera · 0% comisión", color = Muted, fontSize = DesignTokens.bodyText, lineHeight = 20.sp, maxLines = 2, modifier = Modifier.weight(1f))
                         }
                     }
                 }
@@ -1222,15 +1217,15 @@ private fun MerchantScreen(
                         Box(Modifier.size(205.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFFEAF2FF)), contentAlignment = Alignment.Center) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(Icons.Default.QrCode2, contentDescription = null, tint = Color(0xFF3475D3), modifier = Modifier.size(84.dp))
-                                Text("DEMO · NO PAGAR", color = Color(0xFFB54743), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Text("DEMO · NO PAGAR", color = Color(0xFFB54743), fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
                     else if (method.qrImageUrl.isNotBlank()) MerchantQrImage(profile.uid, method.provider, Modifier.size(205.dp).clip(RoundedCornerShape(10.dp)), "QR de ${paymentProviderNames[method.provider] ?: "pago"}")
-                    else Text("Configura el QR de tu comercio desde la web para mostrarlo aquí.", color = Muted, textAlign = TextAlign.Center, fontSize = 13.sp)
-                    Spacer(Modifier.height(6.dp)); Text("${paymentProviderNames[method.provider] ?: method.provider} · ${method.paymentKeyLabel}", color = Muted, fontSize = 13.sp)
-                    Spacer(Modifier.height(9.dp)); Text(orderCode, color = Muted, fontSize = 13.sp); Text(formatCop(total), color = Navy, fontWeight = FontWeight.Bold, fontSize = 25.sp)
-                    Spacer(Modifier.height(6.dp)); Text(if (isDemo) "Simulación local: no se crea un cobro real." else "Esperando confirmación del pago…", color = if (isDemo) Muted else Green, fontSize = 13.sp)
+                    else Text("Configura el QR de tu comercio desde la web para mostrarlo aquí.", color = Muted, textAlign = TextAlign.Center, fontSize = DesignTokens.bodyText)
+                    Spacer(Modifier.height(6.dp)); Text("${paymentProviderNames[method.provider] ?: method.provider} · ${method.paymentKeyLabel}", color = Muted, fontSize = DesignTokens.bodyText)
+                    Spacer(Modifier.height(9.dp)); Text(orderCode, color = Muted, fontSize = DesignTokens.bodyText); Text(formatCop(total), color = Navy, fontWeight = FontWeight.Bold, fontSize = DesignTokens.bodyText)
+                    Spacer(Modifier.height(6.dp)); Text(if (isDemo) "Simulación local: no se crea un cobro real." else "Esperando confirmación del pago…", color = if (isDemo) Muted else Green, fontSize = DesignTokens.bodyText)
                 }
             },
             confirmButton = { TextButton(onClick = { qrState = null }) { Text("Listo") } },
@@ -1242,8 +1237,8 @@ private fun MerchantScreen(
             onDismissRequest = { demoSharePreview = null },
             title = { Text("Vista previa para WhatsApp", color = Navy, fontWeight = FontWeight.Bold) },
             text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(preview, color = Muted, fontSize = 13.sp)
-                Text("Modo demo: no se envía el mensaje ni se crea un enlace de pago.", color = Color(0xFFB54743), fontSize = 13.sp)
+                Text(preview, color = Muted, fontSize = DesignTokens.bodyText)
+                Text("Modo demo: no se envía el mensaje ni se crea un enlace de pago.", color = Color(0xFFB54743), fontSize = DesignTokens.bodyText)
             } },
             confirmButton = { TextButton(onClick = { demoSharePreview = null }) { Text("Cerrar") } },
         )
@@ -1312,8 +1307,8 @@ private fun MerchantCatalogScreen(
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                Text("Productos", color = Navy, fontSize = if (compact) 18.sp else 20.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                Text(if (catalogLoadError.isNotBlank()) catalogLoadError else if (isDemo) "Modo de prueba · catálogo temporal" else "Gestión de catálogo e impuestos", color = if (catalogLoadError.isNotBlank()) Color(0xFFB54743) else Muted, fontSize = DesignTokens.contentText, lineHeight = 17.sp, maxLines = 2)
+                Text("Productos", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(if (catalogLoadError.isNotBlank()) catalogLoadError else if (isDemo) "Modo de prueba · catálogo temporal" else "Gestión de catálogo e impuestos", color = if (catalogLoadError.isNotBlank()) Color(0xFFB54743) else Muted, fontSize = DesignTokens.bodyText, lineHeight = 20.sp, maxLines = 2)
             }
             AppOutlinedButton(
                 onClick = { showProducts = true },
@@ -1321,27 +1316,27 @@ private fun MerchantCatalogScreen(
             ) {
                 Icon(Icons.Default.Storefront, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("Ver lista (${catalogProducts.size})", fontSize = DesignTokens.contentText, maxLines = 1)
+                Text("Ver lista (${catalogProducts.size})", fontSize = DesignTokens.bodyText, maxLines = 1)
             }
         }
         AppCard {
             Column(Modifier.fillMaxWidth().padding(if (compact) 7.dp else 9.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 5.dp)) {
-                Text(if (editingProductId.isBlank()) "Crear producto" else "Editar producto", color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                AppTextField(catalogName, { catalogName = it.take(100) }, label = "Nombre del producto", modifier = Modifier.fillMaxWidth().then(rememberKeepFocusedFieldVisible()))
+                Text(if (editingProductId.isBlank()) "Crear producto" else "Editar producto", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold)
+                VeriFixedTextField(catalogName, { catalogName = it.take(100) }, label = "Nombre del producto", modifier = Modifier.fillMaxWidth().then(rememberKeepFocusedFieldVisible()))
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    AppTextField(catalogPrice, { catalogPrice = it.filter(Char::isDigit).take(10) }, label = "Precio (\$)", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1.35f).then(rememberKeepFocusedFieldVisible()))
-                    AppTextField(catalogVatRate, { catalogVatRate = it.filter { char -> char.isDigit() || char == '.' || char == ',' }.take(6) }, label = "IVA (%)", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f).then(rememberKeepFocusedFieldVisible()))
+                    VeriFixedTextField(catalogPrice, { catalogPrice = it.filter(Char::isDigit).take(10) }, label = "Precio (\$)", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1.35f).then(rememberKeepFocusedFieldVisible()))
+                    VeriFixedTextField(catalogVatRate, { catalogVatRate = it.filter { char -> char.isDigit() || char == '.' || char == ',' }.take(6) }, label = "IVA (%)", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f).then(rememberKeepFocusedFieldVisible()))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = catalogPriceIncludesVat, onCheckedChange = { catalogPriceIncludesVat = it }, modifier = Modifier.size(30.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("El precio ya incluye IVA", color = Navy, fontSize = 13.sp, maxLines = 1)
+                    Text("El precio ya incluye IVA", color = Navy, fontSize = DesignTokens.bodyText, maxLines = 1)
                 }
                 if (!compact) Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     listOf("Sin IVA" to pricing.beforeVat, "IVA" to pricing.vatAmount, "Con IVA" to pricing.withVat).forEach { (label, value) ->
                         Column(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(Color(0xFFF5F7FA)).padding(horizontal = 6.dp, vertical = 5.dp)) {
-                            Text(label, color = Muted, fontSize = 13.sp, maxLines = 1)
-                            Text(formatCop(value), color = Navy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            Text(label, color = Muted, fontSize = DesignTokens.bodyText, maxLines = 1)
+                            Text(formatCop(value), color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.SemiBold, maxLines = 1)
                         }
                     }
                 }
@@ -1383,10 +1378,10 @@ private fun MerchantCatalogScreen(
                             }
                         },
                         modifier = Modifier.weight(1f),
-                    ) { Text(if (savingProduct) "Guardando…" else if (editingProductId.isBlank()) "Guardar producto" else "Guardar cambios", fontSize = 13.sp, maxLines = 1) }
-                    if (editingProductId.isNotBlank()) TextButton(onClick = { editingProductId = ""; catalogName = ""; catalogPrice = ""; catalogVatRate = ""; catalogPriceIncludesVat = false }) { Text("Cancelar", fontSize = 13.sp) }
+                    ) { Text(if (savingProduct) "Guardando…" else if (editingProductId.isBlank()) "Guardar producto" else "Guardar cambios", fontSize = DesignTokens.bodyText, maxLines = 1) }
+                    if (editingProductId.isNotBlank()) TextButton(onClick = { editingProductId = ""; catalogName = ""; catalogPrice = ""; catalogVatRate = ""; catalogPriceIncludesVat = false }) { Text("Cancelar", fontSize = DesignTokens.bodyText) }
                 }
-                if (catalogMessage.isNotBlank()) Text(catalogMessage, color = if (catalogMessage.startsWith("No se pudo") || catalogMessage.startsWith("El IVA")) Color(0xFFB54743) else Green, fontSize = 13.sp, maxLines = 1)
+                if (catalogMessage.isNotBlank()) Text(catalogMessage, color = if (catalogMessage.startsWith("No se pudo") || catalogMessage.startsWith("El IVA")) Color(0xFFB54743) else Green, fontSize = DesignTokens.bodyText, maxLines = 1)
             }
         }
         if (!compact) {
@@ -1394,8 +1389,8 @@ private fun MerchantCatalogScreen(
             Column(Modifier.fillMaxWidth().padding(if (compact) 8.dp else 10.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 4.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Ajustes del negocio", color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                        Text("Ajuste interno sumado al total", color = Muted, fontSize = DesignTokens.contentText, lineHeight = 17.sp, maxLines = 2)
+                        Text("Ajustes del negocio", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text("Ajuste interno sumado al total", color = Muted, fontSize = DesignTokens.bodyText, lineHeight = 20.sp, maxLines = 2)
                     }
                     AppButton(
                         enabled = !savingAdjustments,
@@ -1423,7 +1418,7 @@ private fun MerchantCatalogScreen(
                             }
                         },
                         modifier = Modifier,
-                    ) { Text(if (savingAdjustments) "…" else "Guardar", fontSize = 13.sp) }
+                    ) { Text(if (savingAdjustments) "…" else "Guardar", fontSize = DesignTokens.bodyText) }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(Color(0xFFF7F9FC)).padding(6.dp)) {
@@ -1433,7 +1428,7 @@ private fun MerchantCatalogScreen(
                         AdjustmentEditor("Por pedido", perOrderEnabledDraft, { perOrderEnabledDraft = it }, perOrderModeDraft, { perOrderModeDraft = it }, perOrderValueDraft, { perOrderValueDraft = it })
                     }
                 }
-                if (adjustmentMessage.isNotBlank()) Text(adjustmentMessage, color = if (adjustmentMessage.startsWith("No se")) Color(0xFFB54743) else Green, fontSize = 13.sp, maxLines = 2)
+                if (adjustmentMessage.isNotBlank()) Text(adjustmentMessage, color = if (adjustmentMessage.startsWith("No se")) Color(0xFFB54743) else Green, fontSize = DesignTokens.bodyText, maxLines = 2)
             }
         }
         }
@@ -1443,13 +1438,13 @@ private fun MerchantCatalogScreen(
         onDismissRequest = { showProducts = false },
         title = { Text("Mis productos (${catalogProducts.size})", color = Navy, fontWeight = FontWeight.Bold) },
         text = {
-            if (catalogProducts.isEmpty()) Text("Aún no hay productos. Créalo en esta pantalla.", color = Muted, fontSize = 13.sp)
+            if (catalogProducts.isEmpty()) Text("Aún no hay productos. Créalo en esta pantalla.", color = Muted, fontSize = DesignTokens.bodyText)
             else LazyColumn(state = productListState, modifier = Modifier.heightIn(max = 380.dp), verticalArrangement = Arrangement.spacedBy(7.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp)) {
                 items(catalogProducts, key = { it.id }) { product ->
                     AppCard {
                         Column(Modifier.fillMaxWidth().padding(9.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                            Text(product.name, color = Navy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            Text("IVA ${product.vatRate}% · Sin IVA ${formatCop(product.priceWithoutVat)} · Total ${formatCop(product.priceWithVat)}", color = Muted, fontSize = 13.sp, lineHeight = 17.sp, modifier = Modifier.fillMaxWidth())
+                            Text(product.name, color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.SemiBold)
+                            Text("IVA ${product.vatRate}% · Sin IVA ${formatCop(product.priceWithoutVat)} · Total ${formatCop(product.priceWithVat)}", color = Muted, fontSize = DesignTokens.bodyText, lineHeight = 20.sp, modifier = Modifier.fillMaxWidth())
                             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                                 TextButton(onClick = {
                                     editingProductId = product.id
@@ -1458,7 +1453,7 @@ private fun MerchantCatalogScreen(
                                     catalogVatRate = if (product.vatRate == 0.0) "" else product.vatRate.toString()
                                     catalogPriceIncludesVat = product.priceIncludesVat
                                     showProducts = false
-                                }) { Text("Editar", fontSize = 13.sp) }
+                                }) { Text("Editar", fontSize = DesignTokens.bodyText) }
                                 TextButton(enabled = !savingProduct, onClick = {
                                     scope.launch {
                                         savingProduct = true
@@ -1473,7 +1468,7 @@ private fun MerchantCatalogScreen(
                                             .onFailure { catalogMessage = firestoreWriteErrorMessage(it, "eliminar el producto", "No se pudo eliminar el producto.") }
                                         savingProduct = false
                                     }
-                                }) { Text("Eliminar", color = Color(0xFFB54743), fontSize = 13.sp) }
+                                }) { Text("Eliminar", color = Color(0xFFB54743), fontSize = DesignTokens.bodyText) }
                             }
                         }
                     }
@@ -1733,8 +1728,8 @@ private fun OrdersScreen(profile: UserProfile, demoOrders: List<OrderEntity>, on
     val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize().background(Color(0xFFF5F7FA)).padding(18.dp)) {
         if (isDemo) DemoNotice()
-        Text("PEDIDOS Y ENTREGAS", color = Color(0xFF3473CC), fontSize = 13.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(5.dp)); Text("Trazabilidad", color = Navy, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text("PEDIDOS Y ENTREGAS", color = Color(0xFF3473CC), fontSize = DesignTokens.bodyText, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(5.dp)); Text("Trazabilidad", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(13.dp))
         if (orders.isEmpty()) EmptyCard("Tus pedidos aparecerán aquí cuando se sincronicen.")
         else LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -1773,13 +1768,13 @@ private fun ListenerStatusScreen(isDemo: Boolean = false) {
     }
     Column(Modifier.fillMaxSize().background(Color(0xFFF5F7FA)).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (isDemo) DemoNotice()
-        Text("CELULAR RECEPTOR", color = Color(0xFF3473CC), fontSize = 13.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
-        Text("Confirmación bancaria", color = Navy, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+        Text("CELULAR RECEPTOR", color = Color(0xFF3473CC), fontSize = DesignTokens.bodyText, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
+        Text("Confirmación bancaria", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold)
         AppCard {
             Column(Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.NotificationsActive, null, tint = if (allowed) Green else Color(0xFFB77C36)); Spacer(Modifier.width(10.dp)); Column { Text(if (allowed) "Permiso activado" else "Permiso pendiente", color = Navy, fontWeight = FontWeight.Bold, fontSize = 13.sp); Text("Acceso a notificaciones de pago", color = Muted, fontSize = 13.sp) } }
-                Text("VeriPago solo lee el texto de las notificaciones de abonos. Nunca solicita claves ni acceso dentro de tu banco.", color = Muted, fontSize = 13.sp, lineHeight = 16.sp)
-                if (isDemo) Text("La demostración no solicita ni modifica permisos del teléfono.", color = Muted, fontSize = 13.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.NotificationsActive, null, tint = if (allowed) Green else Color(0xFFB77C36)); Spacer(Modifier.width(10.dp)); Column { Text(if (allowed) "Permiso activado" else "Permiso pendiente", color = Navy, fontWeight = FontWeight.Bold, fontSize = DesignTokens.bodyText); Text("Acceso a notificaciones de pago", color = Muted, fontSize = DesignTokens.bodyText) } }
+                Text("VeriPago solo lee el texto de las notificaciones de abonos. Nunca solicita claves ni acceso dentro de tu banco.", color = Muted, fontSize = DesignTokens.bodyText, lineHeight = 20.sp)
+                if (isDemo) Text("La demostración no solicita ni modifica permisos del teléfono.", color = Muted, fontSize = DesignTokens.bodyText)
                 else {
                     Button(onClick = { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, modifier = Modifier.fillMaxWidth()) { Text(if (allowed) "Administrar permiso" else "Activar escucha bancaria") }
                     if (allowed) OutlinedButton(onClick = { startPaymentListener(context) }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.NotificationsActive, null); Spacer(Modifier.width(6.dp)); Text("Reanudar escucha") }
@@ -1788,9 +1783,9 @@ private fun ListenerStatusScreen(isDemo: Boolean = false) {
         }
         AppCard {
             Column(Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Billeteras compatibles", color = Navy, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Text("Nequi · Daviplata · Bre-B", color = Muted, fontSize = 13.sp)
-                Text("Las reglas se actualizan automáticamente y quedan disponibles sin conexión.", color = Muted, fontSize = 13.sp)
+                Text("Billeteras compatibles", color = Navy, fontWeight = FontWeight.Bold, fontSize = DesignTokens.bodyText)
+                Text("Nequi · Daviplata · Bre-B", color = Muted, fontSize = DesignTokens.bodyText)
+                Text("Las reglas se actualizan automáticamente y quedan disponibles sin conexión.", color = Muted, fontSize = DesignTokens.bodyText)
             }
         }
     }
@@ -1802,7 +1797,7 @@ private fun DemoNotice() {
         Text(
             "PERFIL DE DEMOSTRACIÓN · No guarda datos ni procesa pagos reales.",
             color = Color(0xFF855E23),
-            fontSize = 13.sp,
+            fontSize = DesignTokens.bodyText,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.fillMaxWidth().padding(10.dp),
         )
@@ -1837,10 +1832,10 @@ private fun AdminScreen() {
     ) {
         item {
             Column(Modifier.padding(top = 16.dp, bottom = 2.dp)) {
-                Text("CONSOLA DE PLATAFORMA", color = Color(0xFF3473CC), fontSize = 13.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
+                Text("CONSOLA DE PLATAFORMA", color = Color(0xFF3473CC), fontSize = DesignTokens.bodyText, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(5.dp))
-                Text("Todo conectado.", color = Navy, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                Text("Monitorea la operación de VeriPago.", color = Muted, fontSize = 13.sp)
+                Text("Todo conectado.", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold)
+                Text("Monitorea la operación de VeriPago.", color = Muted, fontSize = DesignTokens.bodyText)
             }
         }
         if (error.isNotBlank()) item { AdminInlineError(error) }
@@ -1859,9 +1854,9 @@ private fun AdminScreen() {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.VolumeUp, null, tint = Color(0xFF3475D3))
                         Spacer(Modifier.width(8.dp))
-                        Text("Prueba de texto a voz", color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text("Prueba de texto a voz", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold)
                     }
-                    Text("Escucha cómo suena el aviso de VeriPago. Es una simulación, no un pago real.", color = Muted, fontSize = 13.sp, lineHeight = 15.sp)
+                    Text("Escucha cómo suena el aviso de VeriPago. Es una simulación, no un pago real.", color = Muted, fontSize = DesignTokens.bodyText, lineHeight = 20.sp)
                     Button(onClick = { voiceConfirmation.announceTest() }, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.VolumeUp, contentDescription = null)
                         Spacer(Modifier.width(7.dp))
@@ -1873,10 +1868,10 @@ private fun AdminScreen() {
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
-                    Text("Actividad reciente", color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    Text("Operación global de VeriPago.", color = Muted, fontSize = 13.sp)
+                    Text("Actividad reciente", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold)
+                    Text("Operación global de VeriPago.", color = Muted, fontSize = DesignTokens.bodyText)
                 }
-                TextButton(onClick = { refresh() }) { Text("Actualizar", fontSize = 13.sp) }
+                TextButton(onClick = { refresh() }) { Text("Actualizar", fontSize = DesignTokens.bodyText) }
             }
         }
         if (loading && overview == null) item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
@@ -1915,18 +1910,18 @@ private fun AdminRulesScreen() {
     ) {
         item {
             Column(Modifier.padding(top = 16.dp, bottom = 2.dp)) {
-                Text("REGLAS REGEX", color = Color(0xFF3473CC), fontSize = 13.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(5.dp)); Text("Reglas bancarias", color = Navy, fontSize = 23.sp, fontWeight = FontWeight.Bold)
-                Text("Prueba las expresiones antes de sincronizarlas.", color = Muted, fontSize = 13.sp)
+                Text("REGLAS REGEX", color = Color(0xFF3473CC), fontSize = DesignTokens.bodyText, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(5.dp)); Text("Reglas bancarias", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold)
+                Text("Prueba las expresiones antes de sincronizarlas.", color = Muted, fontSize = DesignTokens.bodyText)
             }
         }
         if (error.isNotBlank()) item { AdminInlineError(error) }
         item {
             AppCard {
                 Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    OutlinedTextField(sampleText, { sampleText = it }, label = { Text("Texto de notificación") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
-                    OutlinedTextField(amountRegex, { amountRegex = it }, label = { Text("Expresión para monto") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
-                    OutlinedTextField(senderRegex, { senderRegex = it }, label = { Text("Expresión para remitente") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                    VeriFixedTextField(sampleText, { sampleText = it }, label = "Texto de notificación", modifier = Modifier.fillMaxWidth())
+                    VeriFixedTextField(amountRegex, { amountRegex = it }, label = "Expresión para monto", modifier = Modifier.fillMaxWidth())
+                    VeriFixedTextField(senderRegex, { senderRegex = it }, label = "Expresión para remitente", modifier = Modifier.fillMaxWidth())
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = {
                             parsedText = try {
@@ -1935,7 +1930,7 @@ private fun AdminRulesScreen() {
                                 val parsed = BankNotificationParser.parse(sampleText, rule)
                                 if (parsed == null) "Sin coincidencia" else "Monto: ${formatCop(parsed.amount)} · Remitente: ${parsed.sender.ifBlank { "Sin coincidencia" }}"
                             } catch (_: IllegalArgumentException) { "Regex inválida" }
-                        }, modifier = Modifier.weight(1f)) { Text("Probar reglas", fontSize = 13.sp) }
+                        }, modifier = Modifier.weight(1f)) { Text("Probar reglas", fontSize = DesignTokens.bodyText) }
                         Button(enabled = !saving, onClick = {
                             scope.launch {
                                 saving = true; error = ""
@@ -1944,16 +1939,16 @@ private fun AdminRulesScreen() {
                                     .onFailure { error = it.localizedMessage ?: "No se pudo guardar la regla." }
                                 saving = false
                             }
-                        }, modifier = Modifier.weight(1f)) { Text(if (saving) "Guardando…" else "Guardar desactivada", fontSize = 13.sp) }
+                        }, modifier = Modifier.weight(1f)) { Text(if (saving) "Guardando…" else "Guardar desactivada", fontSize = DesignTokens.bodyText) }
                     }
-                    parsedText?.let { Text(it, color = if (it == "Regex inválida") Color(0xFFB54747) else Navy, fontSize = 13.sp) }
+                    parsedText?.let { Text(it, color = if (it == "Regex inválida") Color(0xFFB54747) else Navy, fontSize = DesignTokens.bodyText) }
                 }
             }
         }
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Reglas guardadas", color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                TextButton(onClick = { refresh() }) { Text("Actualizar", fontSize = 13.sp) }
+                Text("Reglas guardadas", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold)
+                TextButton(onClick = { refresh() }) { Text("Actualizar", fontSize = DesignTokens.bodyText) }
             }
         }
         if (loading && rules.isEmpty()) item { Box(Modifier.fillMaxWidth().padding(18.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
@@ -1964,10 +1959,10 @@ private fun AdminRulesScreen() {
                     Box(Modifier.size(10.dp).clip(CircleShape).background(if (rule.isActive) Green else Muted))
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(rule.walletName.ifBlank { "Personalizada" }, color = Navy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text(rule.androidPackage.ifBlank { "Paquete por configurar" }, color = Muted, fontSize = 13.sp)
+                        Text(rule.walletName.ifBlank { "Personalizada" }, color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.SemiBold)
+                        Text(rule.androidPackage.ifBlank { "Paquete por configurar" }, color = Muted, fontSize = DesignTokens.bodyText)
                     }
-                    Text(if (rule.isActive) "Activa" else "Desactivada", color = if (rule.isActive) Green else Muted, fontSize = 13.sp)
+                    Text(if (rule.isActive) "Activa" else "Desactivada", color = if (rule.isActive) Green else Muted, fontSize = DesignTokens.bodyText)
                 }
             }
         }
@@ -2000,11 +1995,11 @@ private fun AdminUsersScreen(currentUser: UserProfile) {
         item {
             Row(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
-                    Text("USUARIOS", color = Color(0xFF3473CC), fontSize = 13.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(5.dp)); Text("Perfiles registrados", color = Navy, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                    Text("Asigna el rol correcto para cada cuenta.", color = Muted, fontSize = 13.sp)
+                    Text("USUARIOS", color = Color(0xFF3473CC), fontSize = DesignTokens.bodyText, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(5.dp)); Text("Perfiles registrados", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold)
+                    Text("Asigna el rol correcto para cada cuenta.", color = Muted, fontSize = DesignTokens.bodyText)
                 }
-                TextButton(onClick = { refresh() }) { Text("Actualizar", fontSize = 13.sp) }
+                TextButton(onClick = { refresh() }) { Text("Actualizar", fontSize = DesignTokens.bodyText) }
             }
         }
         if (error.isNotBlank()) item { AdminInlineError(error) }
@@ -2038,12 +2033,12 @@ private fun AdminUserCard(user: UserProfile, currentUid: String, saving: Boolean
             }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(user.displayName.ifBlank { "Usuario VeriPago" }, color = Navy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                Text(user.email, color = Muted, fontSize = 13.sp, maxLines = 1)
+                Text(user.displayName.ifBlank { "Usuario VeriPago" }, color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Text(user.email, color = Muted, fontSize = DesignTokens.bodyText, maxLines = 1)
             }
             Box {
                 TextButton(enabled = currentUid != user.uid && !saving, onClick = { expanded = true }) {
-                    Text(if (saving) "Guardando…" else if (user.role == "ADMINISTRADOR") "Administrador" else "Comerciante", fontSize = 13.sp, maxLines = 1)
+                    Text(if (saving) "Guardando…" else if (user.role == "ADMINISTRADOR") "Administrador" else "Comerciante", fontSize = DesignTokens.bodyText, maxLines = 1)
                 }
                 DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     listOf("COMERCIANTE" to "Comerciante", "ADMINISTRADOR" to "Administrador").forEach { (role, label) ->
@@ -2085,22 +2080,22 @@ private fun AdminPlatformScreen() {
     ) {
         item {
             Column(Modifier.padding(top = 16.dp, bottom = 2.dp)) {
-                Text("PLATAFORMA", color = Color(0xFF3473CC), fontSize = 13.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(5.dp)); Text("App Android", color = Navy, fontSize = 23.sp, fontWeight = FontWeight.Bold)
-                Text("Actualiza el APK ofrecido para descarga.", color = Muted, fontSize = 13.sp)
+                Text("PLATAFORMA", color = Color(0xFF3473CC), fontSize = DesignTokens.bodyText, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(5.dp)); Text("App Android", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold)
+                Text("Actualiza el APK ofrecido para descarga.", color = Muted, fontSize = DesignTokens.bodyText)
             }
         }
         if (error.isNotBlank()) item { AdminInlineError(error) }
-        if (message.isNotBlank()) item { Text(message, color = Green, fontSize = 13.sp) }
+        if (message.isNotBlank()) item { Text(message, color = Green, fontSize = DesignTokens.bodyText) }
         item {
             AppCard {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                    Text("Versión publicada", color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("Versión publicada", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold)
                     if (loading) CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                    else if (release == null || release?.url.isNullOrBlank()) Text("No hay una versión publicada.", color = Muted, fontSize = 13.sp)
+                    else if (release == null || release?.url.isNullOrBlank()) Text("No hay una versión publicada.", color = Muted, fontSize = DesignTokens.bodyText)
                     else {
-                        Text("${release?.version.orEmpty()} · ${release?.notes.orEmpty()}", color = Muted, fontSize = 13.sp)
-                        Text("El archivo ya está disponible en Storage.", color = Green, fontSize = 13.sp)
+                        Text("${release?.version.orEmpty()} · ${release?.notes.orEmpty()}", color = Muted, fontSize = DesignTokens.bodyText)
+                        Text("El archivo ya está disponible en Storage.", color = Green, fontSize = DesignTokens.bodyText)
                     }
                 }
             }
@@ -2108,9 +2103,9 @@ private fun AdminPlatformScreen() {
         item {
             AppCard {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                    Text("Publicar app Android", color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    Text("Selecciona el APK y confirma la versión que se mostrará en la web.", color = Muted, fontSize = 13.sp)
-                    OutlinedTextField(version, { version = it }, label = { Text("Versión") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Text("Publicar app Android", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold)
+                    Text("Selecciona el APK y confirma la versión que se mostrará en la web.", color = Muted, fontSize = DesignTokens.bodyText)
+                    VeriFixedTextField(version, { version = it }, label = "Versión", modifier = Modifier.fillMaxWidth())
                     OutlinedButton(onClick = { apkPicker.launch(arrayOf("application/vnd.android.package-archive", "application/octet-stream")) }, modifier = Modifier.fillMaxWidth()) {
                         Text(selectedApk?.lastPathSegment?.substringAfterLast(':') ?: "Seleccionar archivo APK", maxLines = 1)
                     }
@@ -2126,7 +2121,7 @@ private fun AdminPlatformScreen() {
                     }, modifier = Modifier.fillMaxWidth()) {
                         Text(if (saving) "Publicando…" else "Publicar versión")
                     }
-                    Text("El APK estará disponible públicamente desde Storage.", color = Muted, fontSize = 13.sp)
+                    Text("El APK estará disponible públicamente desde Storage.", color = Muted, fontSize = DesignTokens.bodyText)
                 }
             }
         }
@@ -2138,10 +2133,10 @@ private fun AdminOrderRow(order: AdminOrderItem) {
     Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(13.dp)) {
         Row(Modifier.fillMaxWidth().padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(order.customerName.ifBlank { "Pedido ${order.orderCode}" }, color = Navy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                Text("${order.orderCode} · ${order.paymentStatus.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }}", color = Muted, fontSize = 13.sp, maxLines = 1)
+                Text(order.customerName.ifBlank { "Pedido ${order.orderCode}" }, color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Text("${order.orderCode} · ${order.paymentStatus.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }}", color = Muted, fontSize = DesignTokens.bodyText, maxLines = 1)
             }
-            Text(formatCop(order.totalAmount), color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text(formatCop(order.totalAmount), color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -2149,14 +2144,14 @@ private fun AdminOrderRow(order: AdminOrderItem) {
 @Composable
 private fun AdminInlineError(message: String) {
     Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF0F0)), shape = RoundedCornerShape(12.dp)) {
-        Text(message, Modifier.fillMaxWidth().padding(12.dp), color = Color(0xFFB54747), fontSize = 13.sp)
+        Text(message, Modifier.fillMaxWidth().padding(12.dp), color = Color(0xFFB54747), fontSize = DesignTokens.bodyText)
     }
 }
 
 @Composable
 private fun MiniMetric(label: String, value: String, tone: Color, modifier: Modifier = Modifier) {
     Card(modifier, colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(13.dp)) {
-        Column(Modifier.padding(horizontal = 13.dp, vertical = 12.dp)) { Text(label, color = Muted, fontSize = 13.sp); Spacer(Modifier.height(5.dp)); Text(value, color = tone, fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+        Column(Modifier.padding(horizontal = 13.dp, vertical = 12.dp)) { Text(label, color = Muted, fontSize = DesignTokens.bodyText); Spacer(Modifier.height(5.dp)); Text(value, color = tone, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold) }
     }
 }
 
@@ -2166,8 +2161,8 @@ private fun CompactOrder(order: OrderEntity) {
         Box(Modifier.size(34.dp).clip(CircleShape).background(if (order.paymentStatus.startsWith("VERIFIED")) Color(0xFFE8F7F0) else Color(0xFFFFF4E3)), contentAlignment = Alignment.Center) {
             Icon(if (order.paymentStatus.startsWith("VERIFIED")) Icons.Default.CheckCircle else Icons.Default.QrCode2, null, tint = if (order.paymentStatus.startsWith("VERIFIED")) Green else Color(0xFFAA7A31), modifier = Modifier.size(18.dp))
         }
-        Spacer(Modifier.width(9.dp)); Column(Modifier.weight(1f)) { Text(order.customerName.ifBlank { "Cliente" }, color = Navy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold); Text(order.orderCode, color = Muted, fontSize = 13.sp) }
-        Column(horizontalAlignment = Alignment.End) { Text(formatCop(order.totalAmount), color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Bold); Text(if (order.paymentStatus.startsWith("VERIFIED")) "Verificado" else "Pendiente", color = if (order.paymentStatus.startsWith("VERIFIED")) Green else Color(0xFFAA7A31), fontSize = 13.sp) }
+        Spacer(Modifier.width(9.dp)); Column(Modifier.weight(1f)) { Text(order.customerName.ifBlank { "Cliente" }, color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.SemiBold); Text(order.orderCode, color = Muted, fontSize = DesignTokens.bodyText) }
+        Column(horizontalAlignment = Alignment.End) { Text(formatCop(order.totalAmount), color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold); Text(if (order.paymentStatus.startsWith("VERIFIED")) "Verificado" else "Pendiente", color = if (order.paymentStatus.startsWith("VERIFIED")) Green else Color(0xFFAA7A31), fontSize = DesignTokens.bodyText) }
     }
     Divider(color = Color(0xFFF0F2F5))
 }
@@ -2185,8 +2180,8 @@ private fun OrderCard(order: OrderEntity, onItemDelivered: ((Int) -> Unit)?, onO
     val allItemsDelivered = items.isNotEmpty() && items.indices.all { it in deliveredIndexes }
     AppCard {
         Column(Modifier.padding(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(order.orderCode, color = Navy, fontWeight = FontWeight.Bold, fontSize = 13.sp); Text(order.customerName.ifBlank { "Cliente" }, color = Muted, fontSize = 13.sp) }; Text(formatCop(order.totalAmount), color = Navy, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
-            Spacer(Modifier.height(8.dp)); Text(if (order.paymentStatus.startsWith("VERIFIED")) "Pago verificado" else "Pago pendiente", color = if (order.paymentStatus.startsWith("VERIFIED")) Green else Color(0xFFAA7A31), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(order.orderCode, color = Navy, fontWeight = FontWeight.Bold, fontSize = DesignTokens.bodyText); Text(order.customerName.ifBlank { "Cliente" }, color = Muted, fontSize = DesignTokens.bodyText) }; Text(formatCop(order.totalAmount), color = Navy, fontWeight = FontWeight.Bold, fontSize = DesignTokens.bodyText) }
+            Spacer(Modifier.height(8.dp)); Text(if (order.paymentStatus.startsWith("VERIFIED")) "Pago verificado" else "Pago pendiente", color = if (order.paymentStatus.startsWith("VERIFIED")) Green else Color(0xFFAA7A31), fontSize = DesignTokens.bodyText, fontWeight = FontWeight.SemiBold)
             items.forEachIndexed { index, (name, quantity) ->
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Checkbox(
@@ -2194,13 +2189,13 @@ private fun OrderCard(order: OrderEntity, onItemDelivered: ((Int) -> Unit)?, onO
                         onCheckedChange = { checked -> if (checked) onItemDelivered?.invoke(index) },
                         enabled = onItemDelivered != null && order.paymentStatus.startsWith("VERIFIED") && index !in deliveredIndexes,
                     )
-                    Text("$name × $quantity", color = Navy, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                    Text(if (index in deliveredIndexes) "Entregado" else "Pendiente", color = if (index in deliveredIndexes) Green else Muted, fontSize = 13.sp)
+                    Text("$name × $quantity", color = Navy, fontSize = DesignTokens.bodyText, modifier = Modifier.weight(1f))
+                    Text(if (index in deliveredIndexes) "Entregado" else "Pendiente", color = if (index in deliveredIndexes) Green else Muted, fontSize = DesignTokens.bodyText)
                 }
             }
             if (items.isEmpty()) {
                 Spacer(Modifier.height(5.dp))
-                Text("Este pedido no tiene productos detallados para confirmar la entrega.", color = Muted, fontSize = 13.sp)
+                Text("Este pedido no tiene productos detallados para confirmar la entrega.", color = Muted, fontSize = DesignTokens.bodyText)
             } else {
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -2212,10 +2207,10 @@ private fun OrderCard(order: OrderEntity, onItemDelivered: ((Int) -> Unit)?, onO
                     Text(
                         if (order.deliveryStatus == "DELIVERED") "Pedido entregado" else "Marcar pedido completo como entregado",
                         color = if (order.deliveryStatus == "DELIVERED") Green else Navy,
-                        fontSize = 13.sp,
+                        fontSize = DesignTokens.bodyText,
                         modifier = Modifier.weight(1f),
                     )
-                    Text("${deliveredIndexes.intersect(items.indices.toSet()).size}/${items.size}", color = Muted, fontSize = 13.sp)
+                    Text("${deliveredIndexes.intersect(items.indices.toSet()).size}/${items.size}", color = Muted, fontSize = DesignTokens.bodyText)
                 }
             }
         }
@@ -2225,7 +2220,7 @@ private fun OrderCard(order: OrderEntity, onItemDelivered: ((Int) -> Unit)?, onO
 @Composable
 private fun EmptyCard(text: String) {
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(text, color = Muted, fontSize = 13.sp, lineHeight = 17.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(22.dp))
+        Text(text, color = Muted, fontSize = DesignTokens.bodyText, lineHeight = 20.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(22.dp))
     }
 }
 

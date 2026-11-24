@@ -13,27 +13,28 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import com.lantonium.veripago.R
 import com.lantonium.veripago.ui.VeriPagoApp
 
 private val VeriPagoFontFamily = FontFamily(Font(R.font.ford_antenna_regular, FontWeight.Normal))
 private val BaseTypography = Typography()
 private val VeriPagoTypography = Typography(
-    displayLarge = BaseTypography.displayLarge.copy(fontFamily = VeriPagoFontFamily),
-    displayMedium = BaseTypography.displayMedium.copy(fontFamily = VeriPagoFontFamily),
-    displaySmall = BaseTypography.displaySmall.copy(fontFamily = VeriPagoFontFamily),
-    headlineLarge = BaseTypography.headlineLarge.copy(fontFamily = VeriPagoFontFamily),
-    headlineMedium = BaseTypography.headlineMedium.copy(fontFamily = VeriPagoFontFamily),
-    headlineSmall = BaseTypography.headlineSmall.copy(fontFamily = VeriPagoFontFamily),
-    titleLarge = BaseTypography.titleLarge.copy(fontFamily = VeriPagoFontFamily),
-    titleMedium = BaseTypography.titleMedium.copy(fontFamily = VeriPagoFontFamily),
-    titleSmall = BaseTypography.titleSmall.copy(fontFamily = VeriPagoFontFamily),
-    bodyLarge = BaseTypography.bodyLarge.copy(fontFamily = VeriPagoFontFamily),
-    bodyMedium = BaseTypography.bodyMedium.copy(fontFamily = VeriPagoFontFamily),
-    bodySmall = BaseTypography.bodySmall.copy(fontFamily = VeriPagoFontFamily),
-    labelLarge = BaseTypography.labelLarge.copy(fontFamily = VeriPagoFontFamily),
-    labelMedium = BaseTypography.labelMedium.copy(fontFamily = VeriPagoFontFamily),
-    labelSmall = BaseTypography.labelSmall.copy(fontFamily = VeriPagoFontFamily),
+    displayLarge = BaseTypography.displayLarge.copy(fontFamily = VeriPagoFontFamily, fontSize = 15.sp),
+    displayMedium = BaseTypography.displayMedium.copy(fontFamily = VeriPagoFontFamily, fontSize = 15.sp),
+    displaySmall = BaseTypography.displaySmall.copy(fontFamily = VeriPagoFontFamily, fontSize = 15.sp),
+    headlineLarge = BaseTypography.headlineLarge.copy(fontFamily = VeriPagoFontFamily, fontSize = 15.sp),
+    headlineMedium = BaseTypography.headlineMedium.copy(fontFamily = VeriPagoFontFamily, fontSize = 15.sp),
+    headlineSmall = BaseTypography.headlineSmall.copy(fontFamily = VeriPagoFontFamily, fontSize = 15.sp),
+    titleLarge = BaseTypography.titleLarge.copy(fontFamily = VeriPagoFontFamily, fontSize = 15.sp),
+    titleMedium = BaseTypography.titleMedium.copy(fontFamily = VeriPagoFontFamily, fontSize = 15.sp),
+    titleSmall = BaseTypography.titleSmall.copy(fontFamily = VeriPagoFontFamily, fontSize = 15.sp),
+    bodyLarge = BaseTypography.bodyLarge.copy(fontFamily = VeriPagoFontFamily, fontSize = 15.sp),
+    bodyMedium = BaseTypography.bodyMedium.copy(fontFamily = VeriPagoFontFamily, fontSize = 15.sp),
+    bodySmall = BaseTypography.bodySmall.copy(fontFamily = VeriPagoFontFamily, fontSize = 15.sp),
+    labelLarge = BaseTypography.labelLarge.copy(fontFamily = VeriPagoFontFamily, fontSize = 15.sp),
+    labelMedium = BaseTypography.labelMedium.copy(fontFamily = VeriPagoFontFamily, fontSize = 12.sp),
+    labelSmall = BaseTypography.labelSmall.copy(fontFamily = VeriPagoFontFamily, fontSize = 12.sp),
 )
 
 class MainActivity : ComponentActivity() {
