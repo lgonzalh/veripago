@@ -36,6 +36,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -74,7 +75,11 @@ fun VeriNotchedContainer(
         Text(
             label,
             modifier = Modifier.align(Alignment.TopStart).offset(x = 12.dp).background(surfaceColor).padding(horizontal = 4.dp),
-            style = MaterialTheme.typography.labelMedium.copy(fontSize = DesignTokens.fieldLabel),
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontSize = DesignTokens.fieldLabel,
+                lineHeight = 16.sp,
+                platformStyle = PlatformTextStyle(includeFontPadding = true),
+            ),
             color = labelColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -114,6 +119,8 @@ fun VeriFixedTextField(
                 textStyle = MaterialTheme.typography.bodyMedium.copy(
                     color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = DesignTokens.bodyText,
+                    lineHeight = 20.sp,
+                    platformStyle = PlatformTextStyle(includeFontPadding = true),
                 ),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                 decorationBox = { innerTextField ->
@@ -121,7 +128,11 @@ fun VeriFixedTextField(
                         if (value.isEmpty() && !placeholder.isNullOrBlank()) {
                             Text(
                                 placeholder,
-                                fontSize = DesignTokens.bodyText,
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontSize = DesignTokens.bodyText,
+                                    lineHeight = 20.sp,
+                                    platformStyle = PlatformTextStyle(includeFontPadding = true),
+                                ),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -134,7 +145,11 @@ fun VeriFixedTextField(
             if (!focused && value.isNotEmpty()) Text(
                 value,
                 modifier = Modifier.fillMaxWidth().background(surface),
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = DesignTokens.bodyText),
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = DesignTokens.bodyText,
+                    lineHeight = 20.sp,
+                    platformStyle = PlatformTextStyle(includeFontPadding = true),
+                ),
                 color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

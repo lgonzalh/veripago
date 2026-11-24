@@ -103,6 +103,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -1305,20 +1306,24 @@ private fun MerchantCatalogScreen(
             .padding(horizontal = 10.dp, vertical = if (compact) 2.dp else 6.dp),
         verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp),
     ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                Text("Productos", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold, maxLines = 1)
-                Text(if (catalogLoadError.isNotBlank()) catalogLoadError else if (isDemo) "Modo de prueba · catálogo temporal" else "Gestión de catálogo e impuestos", color = if (catalogLoadError.isNotBlank()) Color(0xFFB54743) else Muted, fontSize = DesignTokens.bodyText, lineHeight = 20.sp, maxLines = 2)
-            }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Productos", modifier = Modifier.weight(1f), color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold, maxLines = 1)
             AppOutlinedButton(
                 onClick = { showProducts = true },
-                modifier = Modifier.heightIn(min = DesignTokens.controlHeight),
             ) {
                 Icon(Icons.Default.Storefront, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(4.dp))
                 Text("Ver lista (${catalogProducts.size})", fontSize = DesignTokens.bodyText, maxLines = 1)
             }
         }
+        Text(
+            if (catalogLoadError.isNotBlank()) catalogLoadError else if (isDemo) "Modo de prueba · catálogo temporal" else "Gestión de catálogo e impuestos",
+            color = if (catalogLoadError.isNotBlank()) Color(0xFFB54743) else Muted,
+            fontSize = DesignTokens.fieldLabel,
+            lineHeight = 16.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
         AppCard {
             Column(Modifier.fillMaxWidth().padding(if (compact) 7.dp else 9.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 5.dp)) {
                 Text(if (editingProductId.isBlank()) "Crear producto" else "Editar producto", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold)
