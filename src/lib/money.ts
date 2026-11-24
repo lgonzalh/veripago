@@ -64,7 +64,7 @@ export function calculateOrderTotal(items: Array<{ unitPrice: number; qty: numbe
 }
 
 export const formatCOP = (amount: number) =>
-  new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(amount)
+  `$ ${new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(amount)}`
 
 export const slugify = (value: string) =>
   value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()

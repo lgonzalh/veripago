@@ -22,7 +22,8 @@ describe('order calculator', () => {
   })
 
   it('formats whole COP amounts without decimals', () => {
-    expect(formatCOP(15000)).toContain('15.000')
+    expect(formatCOP(15000)).toBe('$ 15.000')
+    expect(formatCOP(15000)).not.toContain('COP')
   })
 })
 

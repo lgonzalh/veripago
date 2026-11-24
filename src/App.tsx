@@ -394,7 +394,7 @@ function MerchantDashboard({ user }: { user: UserProfile }) {
 
 function OrderTable({ orders, filter, setFilter, markDelivered, exportEnabled = false }: { orders: OrderRecord[]; filter: string; setFilter: (value: string) => void; markDelivered?: (id: string) => void; exportEnabled?: boolean }) {
   const exportCsv = () => {
-    const rows = [['Código', 'Cliente', 'Teléfono', 'Total COP', 'Pago', 'Entrega'], ...orders.map((order) => [order.orderCode, order.customerName, order.customerPhone, String(order.totalAmount), order.paymentStatus, order.deliveryStatus])]
+    const rows = [['Código', 'Cliente', 'Teléfono', 'Total ($)', 'Pago', 'Entrega'], ...orders.map((order) => [order.orderCode, order.customerName, order.customerPhone, String(order.totalAmount), order.paymentStatus, order.deliveryStatus])]
     const csv = rows.map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(',')).join('\r\n')
     const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }))
     const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'veripago-pedidos.csv'; anchor.click(); URL.revokeObjectURL(url)
@@ -407,7 +407,7 @@ function OrderTable({ orders, filter, setFilter, markDelivered, exportEnabled = 
       { header: 'Código', key: 'code', width: 18 },
       { header: 'Cliente', key: 'customer', width: 28 },
       { header: 'Teléfono', key: 'phone', width: 18 },
-      { header: 'Total COP', key: 'total', width: 16 },
+      { header: 'Total ($)', key: 'total', width: 16 },
       { header: 'Pago', key: 'payment', width: 22 },
       { header: 'Entrega', key: 'delivery', width: 22 },
     ]

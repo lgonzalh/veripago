@@ -103,7 +103,7 @@ function normalizeAdjustmentRule(value: unknown): AdjustmentRule {
   const amount = typeof data.value === 'number' && Number.isFinite(data.value) ? data.value : 0
   if (mode === 'PERCENT' && (amount < 0 || amount > 100)) fail('invalid-argument', 'El porcentaje debe estar entre 0 y 100.')
   if (mode === 'FIXED' && (!Number.isSafeInteger(amount) || amount < 0 || amount > 1_000_000_000)) {
-    fail('invalid-argument', 'El valor fijo debe ser COP entero hasta 1.000.000.000.')
+    fail('invalid-argument', 'El valor fijo debe ser un monto entero hasta $ 1.000.000.000.')
   }
   return { enabled: data.enabled === true, mode, value: amount }
 }

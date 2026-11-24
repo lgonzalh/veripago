@@ -230,7 +230,7 @@ internal fun parseAdjustmentDraft(enabled: Boolean, mode: String, raw: String): 
     val value = raw.trim().replace(',', '.').toDoubleOrNull() ?: if (raw.isBlank()) 0.0 else error("Escribe un valor válido.")
     if (enabled && value <= 0.0) error("Escribe un valor mayor que cero o desactiva este ajuste.")
     if (mode == "PERCENT" && value > 100.0) error("El porcentaje no puede superar 100%.")
-    if (mode == "FIXED" && (value % 1.0 != 0.0 || value > 1_000_000_000.0)) error("El valor fijo debe ser COP entero, hasta 1.000.000.000.")
+    if (mode == "FIXED" && (value % 1.0 != 0.0 || value > 1_000_000_000.0)) error("El valor fijo debe ser un monto entero, hasta \$ 1.000.000.000.")
     return MerchantAdjustment(enabled, mode, value)
 }
 
@@ -889,7 +889,7 @@ private fun AdjustmentEditor(
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             TextButton(onClick = { onModeChange("FIXED") }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp, vertical = 0.dp)) {
-                Text(if (mode == "FIXED") "✓ COP" else "COP", fontSize = 10.sp, maxLines = 1)
+                Text(if (mode == "FIXED") "✓ \$" else "\$", fontSize = 10.sp, maxLines = 1)
             }
             TextButton(onClick = { onModeChange("PERCENT") }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp, vertical = 0.dp)) {
                 Text(if (mode == "PERCENT") "✓ %" else "%", fontSize = 10.sp, maxLines = 1)
@@ -898,7 +898,7 @@ private fun AdjustmentEditor(
         OutlinedTextField(
             value = value,
             onValueChange = { input -> onValueChange(input.filter { it.isDigit() || (mode == "PERCENT" && (it == '.' || it == ',')) }.take(12)) },
-            placeholder = { Text(if (mode == "FIXED") "Valor COP" else "Porcentaje") },
+            placeholder = { Text(if (mode == "FIXED") "Valor \$" else "Porcentaje") },
             textStyle = androidx.compose.ui.text.TextStyle(color = Navy, fontSize = 16.sp),
             keyboardOptions = KeyboardOptions(keyboardType = if (mode == "FIXED") KeyboardType.Number else KeyboardType.Decimal),
             singleLine = true,
@@ -1343,7 +1343,7 @@ private fun MerchantCatalogScreen(
                 Text(if (editingProductId.isBlank()) "Crear producto" else "Editar producto", color = Navy, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 OutlinedTextField(catalogName, { catalogName = it.take(100) }, label = { Text("Nombre del producto") }, textStyle = androidx.compose.ui.text.TextStyle(color = Navy, fontSize = 16.sp), singleLine = true, modifier = Modifier.fillMaxWidth().height(56.dp).then(rememberKeepFocusedFieldVisible()))
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    OutlinedTextField(catalogPrice, { catalogPrice = it.filter(Char::isDigit).take(10) }, label = { Text("Precio (COP)") }, textStyle = androidx.compose.ui.text.TextStyle(color = Navy, fontSize = 16.sp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.weight(1.35f).height(56.dp).then(rememberKeepFocusedFieldVisible()))
+                    OutlinedTextField(catalogPrice, { catalogPrice = it.filter(Char::isDigit).take(10) }, label = { Text("Precio (\$)") }, textStyle = androidx.compose.ui.text.TextStyle(color = Navy, fontSize = 16.sp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.weight(1.35f).height(56.dp).then(rememberKeepFocusedFieldVisible()))
                     OutlinedTextField(catalogVatRate, { catalogVatRate = it.filter { char -> char.isDigit() || char == '.' || char == ',' }.take(6) }, label = { Text("IVA (%)") }, textStyle = androidx.compose.ui.text.TextStyle(color = Navy, fontSize = 16.sp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.weight(1f).height(56.dp).then(rememberKeepFocusedFieldVisible()))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2245,7 +2245,7 @@ private fun EmptyCard(text: String) {
     }
 }
 
-private fun formatCop(value: Long): String = "${NumberFormat.getIntegerInstance(Locale("es", "CO")).format(value)} COP"
+private fun formatCop(value: Long): String = "\$ ${NumberFormat.getIntegerInstance(Locale("es", "CO")).format(value)}"
 
 private fun startPaymentListener(context: android.content.Context) {
     val enabled = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners").orEmpty()
