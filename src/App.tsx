@@ -152,8 +152,8 @@ function Landing({ onLogin }: { onLogin: () => void }) {
     <section className="hero section-wrap">
       <div className="hero-copy">
         <div className="eyebrow"><span className="live-dot" /> COBRA DIRECTO, CONFIRMA AL INSTANTE</div>
-        <h1>El pago llega.<br /><span>VeriPago lo confirma.</span></h1>
-        <p className="hero-lead">Muestra tu QR, recibe en Nequi, Daviplata o Bre-B y sigue cada pedido desde un solo lugar. Sin comisiones y sin intermediarios.</p>
+        <h1>El pago llega.<br /><span>VeriPago lo confirma<br />en voz alta.</span></h1>
+        <p className="hero-lead">Muestra tu QR, o envía un link por Whatsapp y recibe en Nequi, Daviplata o Bre-B para verificar el pago de cada pedido desde un solo lugar.</p>
         <div className="hero-actions">
           <button className="button button-primary" onClick={onLogin}>
             Empezar gratis <ArrowRight size={18} />
@@ -408,7 +408,7 @@ function AdminDashboard({ user }: { user: UserProfile }) {
   const [users, setUsers] = useState<UserProfile[]>([])
   const [error, setError] = useState('')
   const [regexText, setRegexText] = useState('Te llegaron $15.000 de Maria Perez')
-  const [amountRegex, setAmountRegex] = useState('(?i)(?:lleg[oó]|recibiste)\\s*\\$?\\s*([0-9][0-9.,]*)')
+  const [amountRegex, setAmountRegex] = useState('(?i)(?:lleg(?:ó|o|aron)|recibiste)\\s*\\$?\\s*([0-9][0-9.,]*)')
   const [senderRegex, setSenderRegex] = useState('(?i)(?:de|remitente)\\s*[:\\-]?\\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑa-záéíóúñ ]{2,60})')
   const [apkFile, setApkFile] = useState<File | null>(null)
   const [apkVersion, setApkVersion] = useState('1.0.0-alpha.1')

@@ -6,6 +6,7 @@ import android.graphics.ImageDecoder
 import android.graphics.drawable.AnimatedImageDrawable
 import android.net.Uri
 import android.os.Build
+import android.provider.OpenableColumns
 import android.provider.Settings
 import android.widget.ImageView
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -34,7 +36,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.QrCode2
@@ -47,6 +49,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -98,21 +102,29 @@ import androidx.work.OneTimeWorkRequestBuilder
 import coil.compose.AsyncImage
 import coil.decode.GifDecoder
 import coil.request.ImageRequest
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.lantonium.veripago.AppGraph
 import com.lantonium.veripago.BuildConfig
 import com.lantonium.veripago.R
 import com.lantonium.veripago.data.FirebaseClients
 import com.lantonium.veripago.data.GoogleAuthRepository
+import com.lantonium.veripago.data.AdminRepository
+import com.lantonium.veripago.data.AdminOverview
+import com.lantonium.veripago.data.AdminOrderItem
+import com.lantonium.veripago.data.AdminRule
+import com.lantonium.veripago.data.PlatformRelease
 import com.lantonium.veripago.data.OrderEntity
 import com.lantonium.veripago.data.PendingSyncScheduler
 import com.lantonium.veripago.data.UserProfile
+import com.lantonium.veripago.data.BankNotificationParser
+import com.lantonium.veripago.data.BankRuleEntity
 import com.lantonium.veripago.service.PaymentMonitorService
+import com.lantonium.veripago.service.VoiceConfirmationEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -132,6 +144,56 @@ private data class AndroidPaymentMethod(
     val beneficiaryName: String,
 )
 
+private const val DEMO_MERCHANT_UID = "demo-paula-local"
+
+private fun isDemoMerchant(profile: UserProfile): Boolean =
+    BuildConfig.DEBUG && profile.uid == DEMO_MERCHANT_UID
+
+private fun demoMerchantProfile() = UserProfile(
+    uid = DEMO_MERCHANT_UID,
+    email = "correapaula882@gmail.com",
+    displayName = "Paula Correa",
+    photoUrl = "",
+    role = "COMERCIANTE",
+    isActive = true,
+    loyaltyPoints = 0,
+)
+
+private fun demoMerchantOrders() = listOf(
+    OrderEntity(
+        orderId = "demo-order-verified",
+        orderCode = "VP-DEMO-101",
+        merchantId = DEMO_MERCHANT_UID,
+        customerUid = null,
+        customerName = "Cliente de prueba",
+        customerPhone = "",
+        itemsJson = "[]",
+        totalAmount = 48500,
+        checkoutChannel = "DEMO",
+        paymentStatus = "VERIFIED",
+        deliveryStatus = "PENDING",
+        matchedNotificationId = null,
+        createdAt = System.currentTimeMillis() - 60_000,
+        updatedAt = System.currentTimeMillis() - 60_000,
+    ),
+    OrderEntity(
+        orderId = "demo-order-pending",
+        orderCode = "VP-DEMO-102",
+        merchantId = DEMO_MERCHANT_UID,
+        customerUid = null,
+        customerName = "Pedido pendiente",
+        customerPhone = "",
+        itemsJson = "[]",
+        totalAmount = 25000,
+        checkoutChannel = "DEMO",
+        paymentStatus = "PENDING",
+        deliveryStatus = "PENDING",
+        matchedNotificationId = null,
+        createdAt = System.currentTimeMillis() - 30_000,
+        updatedAt = System.currentTimeMillis() - 30_000,
+    ),
+)
+
 private val paymentProviderNames = mapOf("NEQUI" to "Nequi", "DAVIPLATA" to "DaviPlata", "BRE_B" to "Bre-B", "OTHER" to "Otro QR")
 private fun paymentProviderLogo(provider: String): Int? = when (provider) {
     "NEQUI" -> R.drawable.logo_nequi
@@ -144,6 +206,7 @@ private fun paymentProviderLogo(provider: String): Int? = when (provider) {
 @Composable
 fun VeriPagoApp(activity: Activity) {
     var profile by remember { mutableStateOf<UserProfile?>(null) }
+    var demoOrders by remember { mutableStateOf(demoMerchantOrders()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf("") }
     val snackbar = remember { SnackbarHostState() }
@@ -156,9 +219,13 @@ fun VeriPagoApp(activity: Activity) {
         profile = cached?.takeIf { it.role == "COMERCIANTE" || it.role == "ADMINISTRADOR" }
         if (cached != null && profile == null) AppGraph.profileCache.clear()
         val currentUser = FirebaseClients.auth?.currentUser
+        val splashTimeRemaining = 3_000L - (System.currentTimeMillis() - splashStartedAt)
+        if (splashTimeRemaining > 0) delay(splashTimeRemaining)
+        // Show the locally restored session without waiting for a network round trip.
+        loading = false
         if (currentUser != null && FirebaseClients.firestore != null) {
             runCatching {
-                val userDoc = FirebaseClients.firestore!!.collection("users").document(currentUser.uid).get().await()
+                val userDoc = FirebaseClients.getUserProfile(currentUser.uid)
                 val role = userDoc.getString("role").orEmpty()
                 if (userDoc.exists() && (role == "COMERCIANTE" || role == "ADMINISTRADOR") && userDoc.getBoolean("isActive") == true) {
                     val saved = UserProfile(currentUser.uid, userDoc.getString("email").orEmpty(), userDoc.getString("displayName").orEmpty(),
@@ -171,11 +238,8 @@ fun VeriPagoApp(activity: Activity) {
                     profile = null
                     error = "Inicia sesión en la app web para registrar tu perfil de comerciante."
                 }
-            }
+            }.onFailure { error = signInErrorMessage(it) }
         }
-        val splashTimeRemaining = 3_000L - (System.currentTimeMillis() - splashStartedAt)
-        if (splashTimeRemaining > 0) delay(splashTimeRemaining)
-        loading = false
     }
 
     val credentialManager = remember { CredentialManager.create(context) }
@@ -185,21 +249,9 @@ fun VeriPagoApp(activity: Activity) {
             try {
                 if (!FirebaseClients.isConfigured) error("Firebase aún no está configurado en este build.")
                 if (BuildConfig.WEB_CLIENT_ID.isBlank()) error("Falta webClientId para Google Credential Manager en local.properties.")
-                val option = GetGoogleIdOption.Builder()
-                    .setFilterByAuthorizedAccounts(false)
-                    .setServerClientId(BuildConfig.WEB_CLIENT_ID)
-                    .setAutoSelectEnabled(false)
-                    .build()
-                val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
-                val credential = try {
-                    credentialManager.getCredential(activity, request).credential
-                } catch (credentialError: GetCredentialException) {
-                    if (credentialError is GetCredentialCancellationException) throw credentialError
-                    val signInOption = GetSignInWithGoogleOption.Builder(BuildConfig.WEB_CLIENT_ID)
-                        .build()
-                    val signInRequest = GetCredentialRequest.Builder().addCredentialOption(signInOption).build()
-                    credentialManager.getCredential(activity, signInRequest).credential
-                }
+                val signInOption = GetSignInWithGoogleOption.Builder(BuildConfig.WEB_CLIENT_ID).build()
+                val request = GetCredentialRequest.Builder().addCredentialOption(signInOption).build()
+                val credential = credentialManager.getCredential(activity, request).credential
                 if (credential !is CustomCredential || credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                     error("Google no devolvió una credencial compatible.")
                 }
@@ -216,7 +268,7 @@ fun VeriPagoApp(activity: Activity) {
             } catch (exception: GetCredentialException) {
                 error = "Google no pudo ofrecer una cuenta. Revisa la conexión e inténtalo de nuevo."
             } catch (exception: Exception) {
-                error = exception.localizedMessage ?: "No se pudo iniciar sesión."
+                error = signInErrorMessage(exception)
             }
         }
     }
@@ -229,6 +281,11 @@ fun VeriPagoApp(activity: Activity) {
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
+                navigationIcon = {
+                    if (!loading && currentRoute == "acerca") IconButton(onClick = { nav.popBackStack() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
+                    }
+                },
                 title = { Row(verticalAlignment = Alignment.CenterVertically) {
                     Image(
                         painter = painterResource(R.drawable.veripago_mark),
@@ -237,22 +294,70 @@ fun VeriPagoApp(activity: Activity) {
                         contentScale = ContentScale.Crop,
                     )
                     Spacer(Modifier.width(9.dp))
-                    Column { Text("VeriPago", color = Navy, fontWeight = FontWeight.Bold, fontSize = 17.sp); Text("ECOSISTEMA DE PAGOS", color = Muted, fontSize = 8.sp, letterSpacing = 1.2.sp) }
+                    Column {
+                        Text("VeriPago", color = Navy, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                        Text("ECOSISTEMA DE VERIFICACIÓN DE PAGOS", color = Muted, fontSize = 7.sp, letterSpacing = 0.35.sp, maxLines = 1)
+                    }
                 } },
                 actions = {
-                    if (profile != null) IconButton(onClick = {
-                        scope.launch { FirebaseClients.auth?.signOut(); AppGraph.profileCache.clear(); profile = null }
-                    }) { Icon(Icons.Default.AccountCircle, contentDescription = "Cerrar sesión", tint = Muted) }
+                    if (!loading && currentRoute != "acerca") IconButton(
+                        onClick = { nav.navigate("acerca") },
+                        modifier = Modifier.clip(CircleShape).background(Color(0xFF2168D4)).size(40.dp),
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = "Acerca de VeriPago", tint = Color.White)
+                    }
+                    if (profile != null) {
+                        val signedInProfile = profile!!
+                        if (signedInProfile.photoUrl.isNotBlank()) {
+                            AsyncImage(
+                                model = signedInProfile.photoUrl,
+                                contentDescription = "Cuenta de Google de ${signedInProfile.displayName} (${signedInProfile.email})",
+                                modifier = Modifier.size(36.dp).clip(CircleShape),
+                                contentScale = ContentScale.Crop,
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier.size(36.dp).clip(CircleShape).background(Navy),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(signedInProfile.displayName.firstOrNull()?.uppercase() ?: "G", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        IconButton(onClick = {
+                            scope.launch {
+                                if (!isDemoMerchant(signedInProfile)) {
+                                    FirebaseClients.auth?.signOut()
+                                    AppGraph.profileCache.clear()
+                                }
+                                profile = null
+                                nav.navigate("inicio") {
+                                    popUpTo(nav.graph.findStartDestination().id) { inclusive = true }
+                                    launchSingleTop = true
+                                }
+                            }
+                        }) {
+                            Image(
+                                painter = painterResource(R.drawable.logout),
+                                contentDescription = "Cerrar sesión",
+                                modifier = Modifier.size(24.dp),
+                            )
+                        }
+                    }
                 },
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
-            if (profile != null) {
+            if (profile != null && currentRoute != "acerca") {
                 NavigationBar(containerColor = Color.White) {
                     val entries = when (profile?.role) {
                         "COMERCIANTE" -> listOf("inicio" to "Cobrar", "pedidos" to "Pedidos", "estado" to "Celular")
-                        "ADMINISTRADOR" -> listOf("inicio" to "Resumen", "pedidos" to "Actividad")
+                        "ADMINISTRADOR" -> listOf(
+                            "inicio" to "Resumen",
+                            "reglas" to "Reglas Regex",
+                            "usuarios" to "Usuarios",
+                            "plataforma" to "Plataforma",
+                        )
                         else -> emptyList()
                     }
                     entries.forEach { (route, label) ->
@@ -260,8 +365,17 @@ fun VeriPagoApp(activity: Activity) {
                         NavigationBarItem(
                             selected = selected,
                             onClick = { nav.navigate(route) { popUpTo(nav.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } },
-                            icon = { Icon(if (route == "pedidos") Icons.Default.CheckCircle else Icons.Default.QrCode2, contentDescription = null) },
-                            label = { Text(label, fontSize = 10.sp) },
+                            icon = {
+                                val icon = when (route) {
+                                    "pedidos" -> Icons.Default.CheckCircle
+                                    "reglas" -> Icons.Default.NotificationsActive
+                                    "usuarios" -> Icons.Default.AccountCircle
+                                    "plataforma" -> Icons.Default.Storefront
+                                    else -> Icons.Default.QrCode2
+                                }
+                                Icon(icon, contentDescription = null)
+                            },
+                            label = { Text(label, fontSize = 9.sp, maxLines = 1) },
                         )
                     }
                 }
@@ -274,30 +388,58 @@ fun VeriPagoApp(activity: Activity) {
                 contentAlignment = Alignment.Center,
             ) {
                 VeriPagoAnimatedSplash(Modifier.fillMaxWidth().height(500.dp).padding(horizontal = 36.dp))
+                Text(
+                    "Ecosistema de verificación de pagos",
+                    modifier = Modifier.align(Alignment.Center).offset(y = 98.dp)
+                        .background(Color(0xFF071A32)).padding(horizontal = 6.dp, vertical = 1.dp),
+                    color = Color.White,
+                    fontSize = 9.sp,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                )
             }
-        } else if (profile == null) {
-            LandingScreen(
-                modifier = Modifier.padding(padding),
-                configured = FirebaseClients.isConfigured,
-                error = error,
-                onLogin = signInWithGoogle,
-            onRegister = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://veripago-9cda6.web.app/VeriPago/"))) },
-            )
         } else {
             NavHost(navController = nav, startDestination = "inicio", modifier = Modifier.padding(padding)) {
                 composable("inicio") {
-                    when (profile?.role) {
-                        "COMERCIANTE" -> MerchantScreen(profile!!, onError = { error = it; scope.launch { snackbar.showSnackbar(it) } })
+                    val signedInProfile = profile
+                    if (signedInProfile == null) {
+                        LandingScreen(
+                            modifier = Modifier,
+                            configured = FirebaseClients.isConfigured,
+                            error = error,
+                            onLogin = signInWithGoogle,
+                            onDemoMerchant = { demoOrders = demoMerchantOrders(); profile = demoMerchantProfile(); error = "" },
+                            onRegister = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://veripago-9cda6.web.app/VeriPago/"))) },
+                        )
+                    } else when (signedInProfile.role) {
+                        "COMERCIANTE" -> MerchantScreen(signedInProfile, demoOrders, { demoOrders = it }, onError = { error = it; scope.launch { snackbar.showSnackbar(it) } })
                         "ADMINISTRADOR" -> AdminScreen()
-                        else -> MerchantScreen(profile!!, onError = { error = it; scope.launch { snackbar.showSnackbar(it) } })
+                        else -> MerchantScreen(signedInProfile, demoOrders, { demoOrders = it }, onError = { error = it; scope.launch { snackbar.showSnackbar(it) } })
                     }
                 }
-                composable("pedidos") { OrdersScreen(profile!!) }
-                composable("estado") { ListenerStatusScreen() }
+                composable("acerca") { AboutScreen() }
+                composable("pedidos") { profile?.let { OrdersScreen(it, demoOrders, { demoOrders = it }) } }
+                composable("estado") { ListenerStatusScreen(isDemo = profile?.let(::isDemoMerchant) == true) }
+                composable("reglas") { if (profile?.role == "ADMINISTRADOR") AdminRulesScreen() else profile?.let { MerchantScreen(it, demoOrders, { demoOrders = it }, onError = { error = it }) } }
+                composable("usuarios") { if (profile?.role == "ADMINISTRADOR") AdminUsersScreen(profile!!) else profile?.let { MerchantScreen(it, demoOrders, { demoOrders = it }, onError = { error = it }) } }
+                composable("plataforma") { if (profile?.role == "ADMINISTRADOR") AdminPlatformScreen() else profile?.let { MerchantScreen(it, demoOrders, { demoOrders = it }, onError = { error = it }) } }
             }
         }
     }
 
+}
+
+private fun signInErrorMessage(exception: Throwable): String {
+    val message = exception.localizedMessage.orEmpty()
+    val firestoreException = exception as? FirebaseFirestoreException
+    return if (firestoreException?.code == FirebaseFirestoreException.Code.UNAVAILABLE ||
+        firestoreException?.code == FirebaseFirestoreException.Code.DEADLINE_EXCEEDED ||
+        message.contains("client is offline", ignoreCase = true)
+    ) {
+        "No se pudo conectar con VeriPago. Revisa la conexión e inténtalo de nuevo."
+    } else {
+        message.ifBlank { "No se pudo iniciar sesión." }
+    }
 }
 
 @Composable
@@ -339,14 +481,14 @@ private fun VeriPagoAnimatedSplash(modifier: Modifier) {
 }
 
 @Composable
-private fun LandingScreen(modifier: Modifier, configured: Boolean, error: String, onLogin: () -> Unit, onRegister: () -> Unit) {
+private fun LandingScreen(modifier: Modifier, configured: Boolean, error: String, onLogin: () -> Unit, onDemoMerchant: () -> Unit, onRegister: () -> Unit) {
     Column(modifier.fillMaxSize().background(Color(0xFFF5F7FA))) {
         Column(Modifier.weight(1f).padding(horizontal = 24.dp).padding(top = 34.dp), verticalArrangement = Arrangement.Center) {
             Text("COBRA DIRECTO. CONFIRMA AL INSTANTE.", color = Green, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
             Spacer(Modifier.height(16.dp))
-            Text("El pago llega.\nVeriPago lo confirma.", color = Navy, fontSize = 34.sp, lineHeight = 39.sp, fontWeight = FontWeight.Bold)
+            Text("El pago llega.\nVeriPago lo confirma en voz alta.", color = Navy, fontSize = 32.sp, lineHeight = 37.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(13.dp))
-            Text("Muestra tu QR, recibe en Nequi, Daviplata o Bre-B y sigue cada pedido desde un solo lugar.", color = Muted, fontSize = 14.sp, lineHeight = 21.sp)
+            Text("Muestra tu QR, o envía un link por Whatsapp y recibe en Nequi, Daviplata o Bre-B para verificar el pago de cada pedido desde un solo lugar.", color = Muted, fontSize = 14.sp, lineHeight = 21.sp)
             Spacer(Modifier.height(24.dp))
             FeatureLine(Icons.Default.QrCode2, "Cobra con QR o comparte por WhatsApp")
             FeatureLine(Icons.Default.VolumeUp, "Escucha la confirmación del pago")
@@ -361,7 +503,7 @@ private fun LandingScreen(modifier: Modifier, configured: Boolean, error: String
             if (error.isNotBlank()) Text(error, color = Color(0xFFB44743), fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             if (!configured) Text("Configura Google Sign-In en Firebase para habilitar el acceso.", color = Muted, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             TextButton(onClick = onRegister, modifier = Modifier.fillMaxWidth()) { Text("Registrar perfil de comerciante en la web") }
-            Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.CloudOff, null, tint = Green, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(5.dp)); Text("Tus pedidos se conservan sin conexión", color = Muted, fontSize = 10.sp) }
+            if (BuildConfig.DEBUG) TextButton(onClick = onDemoMerchant, modifier = Modifier.fillMaxWidth()) { Text("Probar espacio comerciante (demo)") }
         }
     }
 }
@@ -377,12 +519,14 @@ private fun FeatureLine(icon: androidx.compose.ui.graphics.vector.ImageVector, l
 }
 
 @Composable
-private fun MerchantScreen(profile: UserProfile, onError: (String) -> Unit) {
+private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, onDemoOrdersChange: (List<OrderEntity>) -> Unit, onError: (String) -> Unit) {
+    val isDemo = isDemoMerchant(profile)
     var productName by rememberSaveable { mutableStateOf("") }
     var price by rememberSaveable { mutableStateOf("") }
     var quantity by rememberSaveable { mutableStateOf("1") }
     var busy by remember { mutableStateOf(false) }
     var qrState by remember { mutableStateOf<Triple<AndroidPaymentMethod, String, Long>?>(null) }
+    var demoSharePreview by remember { mutableStateOf<String?>(null) }
     var configuredPaymentMethods by remember { mutableStateOf<List<AndroidPaymentMethod>>(emptyList()) }
     var selectedPaymentProvider by rememberSaveable { mutableStateOf("NEQUI") }
     var latestOrders by remember { mutableStateOf<List<OrderEntity>>(emptyList()) }
@@ -390,6 +534,12 @@ private fun MerchantScreen(profile: UserProfile, onError: (String) -> Unit) {
     val context = LocalContext.current
     val amount = (price.toLongOrNull() ?: 0L) * (quantity.toIntOrNull()?.coerceIn(1, 100) ?: 1)
     LaunchedEffect(profile.uid) {
+        if (isDemo) {
+            configuredPaymentMethods = listOf("NEQUI", "DAVIPLATA", "BRE_B").map { provider ->
+                AndroidPaymentMethod(provider, "", "Cuenta de prueba", "Paula Correa")
+            }
+            return@LaunchedEffect
+        }
         val sync = AppGraph.syncManager()
         sync.start(profile.uid)
         runCatching {
@@ -406,8 +556,10 @@ private fun MerchantScreen(profile: UserProfile, onError: (String) -> Unit) {
         AppGraph.payments.observeOrders(profile.uid).collect { latestOrders = it }
     }
     val selectedPaymentMethod = configuredPaymentMethods.find { it.provider == selectedPaymentProvider }
+    val visibleOrders = if (isDemo) demoOrders else latestOrders
 
     LazyColumn(Modifier.fillMaxSize().background(Color(0xFFF5F7FA)).padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+        if (isDemo) item { DemoNotice() }
         item {
             Column(Modifier.padding(top = 14.dp, bottom = 3.dp)) {
                 Text("ESPACIO COMERCIANTE", color = Color(0xFF3473CC), fontSize = 9.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.Bold)
@@ -417,8 +569,8 @@ private fun MerchantScreen(profile: UserProfile, onError: (String) -> Unit) {
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                MiniMetric("Verificados", latestOrders.count { it.paymentStatus.startsWith("VERIFIED") }.toString(), Green, Modifier.weight(1f))
-                MiniMetric("Pendientes", latestOrders.count { it.paymentStatus == "PENDING" }.toString(), Color(0xFF977338), Modifier.weight(1f))
+                MiniMetric("Verificados", visibleOrders.count { it.paymentStatus.startsWith("VERIFIED") }.toString(), Green, Modifier.weight(1f))
+                MiniMetric("Pendientes", visibleOrders.count { it.paymentStatus == "PENDING" }.toString(), Color(0xFF977338), Modifier.weight(1f))
             }
         }
         item {
@@ -460,8 +612,32 @@ private fun MerchantScreen(profile: UserProfile, onError: (String) -> Unit) {
                             scope.launch {
                                 busy = true
                                 try {
-                                    val result = createInSituOrder(profile, productName.ifBlank { "Pedido rápido" }, price.toLong(), quantity.toIntOrNull()?.coerceIn(1, 100) ?: 1, selectedPaymentProvider)
-                                    qrState = Triple(result.first, result.second, amount)
+                                    if (isDemo) {
+                                        val method = selectedPaymentMethod ?: error("Selecciona una billetera de prueba.")
+                                        val orderCode = "VP-DEMO-${System.currentTimeMillis().toString().takeLast(6)}"
+                                        onDemoOrdersChange(listOf(
+                                            OrderEntity(
+                                                orderId = "demo-${System.currentTimeMillis()}",
+                                                orderCode = orderCode,
+                                                merchantId = DEMO_MERCHANT_UID,
+                                                customerUid = null,
+                                                customerName = productName.ifBlank { "Pedido de demostración" },
+                                                customerPhone = "",
+                                                itemsJson = "[]",
+                                                totalAmount = amount,
+                                                checkoutChannel = "DEMO",
+                                                paymentStatus = "PENDING",
+                                                deliveryStatus = "PENDING",
+                                                matchedNotificationId = null,
+                                                createdAt = System.currentTimeMillis(),
+                                                updatedAt = System.currentTimeMillis(),
+                                            ),
+                                        ) + demoOrders)
+                                        qrState = Triple(method, orderCode, amount)
+                                    } else {
+                                        val result = createInSituOrder(profile, productName.ifBlank { "Pedido rápido" }, price.toLong(), quantity.toIntOrNull()?.coerceIn(1, 100) ?: 1, selectedPaymentProvider)
+                                        qrState = Triple(result.first, result.second, amount)
+                                    }
                                 } catch (exception: Exception) { onError(exception.localizedMessage ?: "No se pudo crear el cobro.") }
                                 finally { busy = false }
                             }
@@ -477,9 +653,15 @@ private fun MerchantScreen(profile: UserProfile, onError: (String) -> Unit) {
                             scope.launch {
                                 busy = true
                                 try {
-                                    val url = createShareLink(profile, productName.ifBlank { "Pedido" }, price.toLong())
-                                    val share = "Hola, completa tu pedido: $url"
-                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/?text=${Uri.encode(share)}")))
+                                    if (isDemo) {
+                                        val name = productName.ifBlank { "Pedido de prueba" }
+                                        val demoLink = "https://demo.veripago.local/${System.currentTimeMillis().toString().takeLast(6)}"
+                                        demoSharePreview = "Hola, completa tu pedido de prueba: $demoLink\n\nEste enlace es demostrativo y no recibe pagos."
+                                    } else {
+                                        val url = createShareLink(profile, productName.ifBlank { "Pedido" }, price.toLong())
+                                        val share = "Hola, completa tu pedido: $url"
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/?text=${Uri.encode(share)}")))
+                                    }
                                 } catch (exception: Exception) { onError(exception.localizedMessage ?: "No se pudo crear el enlace.") }
                                 finally { busy = false }
                             }
@@ -495,7 +677,7 @@ private fun MerchantScreen(profile: UserProfile, onError: (String) -> Unit) {
                 Column(Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.NotificationsActive, null, tint = Green); Spacer(Modifier.width(8.dp)); Text("Pagos recibidos", color = Navy, fontWeight = FontWeight.Bold, fontSize = 14.sp) }
                     Spacer(Modifier.height(6.dp))
-                    val visible = latestOrders.take(4)
+                    val visible = visibleOrders.take(4)
                     if (visible.isEmpty()) Text("Tus pedidos aparecerán aquí al sincronizar.", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(vertical = 14.dp))
                     visible.forEach { order -> CompactOrder(order) }
                 }
@@ -510,14 +692,34 @@ private fun MerchantScreen(profile: UserProfile, onError: (String) -> Unit) {
             title = { Text("Escanea y paga", color = Navy, fontWeight = FontWeight.Bold) },
             text = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                    if (method.qrImageUrl.isNotBlank()) AsyncImage(method.qrImageUrl, contentDescription = "QR de ${paymentProviderNames[method.provider] ?: "pago"}", modifier = Modifier.size(205.dp).clip(RoundedCornerShape(10.dp)))
+                    if (isDemo) {
+                        Box(Modifier.size(205.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFFEAF2FF)), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Default.QrCode2, contentDescription = null, tint = Color(0xFF3475D3), modifier = Modifier.size(84.dp))
+                                Text("DEMO · NO PAGAR", color = Color(0xFFB54743), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                    else if (method.qrImageUrl.isNotBlank()) AsyncImage(method.qrImageUrl, contentDescription = "QR de ${paymentProviderNames[method.provider] ?: "pago"}", modifier = Modifier.size(205.dp).clip(RoundedCornerShape(10.dp)))
                     else Text("Configura el QR de tu comercio desde la web para mostrarlo aquí.", color = Muted, textAlign = TextAlign.Center, fontSize = 11.sp)
                     Spacer(Modifier.height(6.dp)); Text("${paymentProviderNames[method.provider] ?: method.provider} · ${method.paymentKeyLabel}", color = Muted, fontSize = 10.sp)
                     Spacer(Modifier.height(9.dp)); Text(orderCode, color = Muted, fontSize = 11.sp); Text(formatCop(total), color = Navy, fontWeight = FontWeight.Bold, fontSize = 25.sp)
-                    Spacer(Modifier.height(6.dp)); Text("Esperando confirmación del pago…", color = Green, fontSize = 10.sp)
+                    Spacer(Modifier.height(6.dp)); Text(if (isDemo) "Simulación local: no se crea un cobro real." else "Esperando confirmación del pago…", color = if (isDemo) Muted else Green, fontSize = 10.sp)
                 }
             },
             confirmButton = { TextButton(onClick = { qrState = null }) { Text("Listo") } },
+        )
+    }
+
+    demoSharePreview?.let { preview ->
+        AlertDialog(
+            onDismissRequest = { demoSharePreview = null },
+            title = { Text("Vista previa para WhatsApp", color = Navy, fontWeight = FontWeight.Bold) },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(preview, color = Muted, fontSize = 12.sp)
+                Text("Modo demo: no se envía el mensaje ni se crea un enlace de pago.", color = Color(0xFFB54743), fontSize = 10.sp)
+            } },
+            confirmButton = { TextButton(onClick = { demoSharePreview = null }) { Text("Cerrar") } },
         )
     }
 }
@@ -593,26 +795,32 @@ private suspend fun createShareLink(profile: UserProfile, name: String, price: L
 }
 
 @Composable
-private fun OrdersScreen(profile: UserProfile) {
+private fun OrdersScreen(profile: UserProfile, demoOrders: List<OrderEntity>, onDemoOrdersChange: (List<OrderEntity>) -> Unit) {
+    val isDemo = isDemoMerchant(profile)
     val context = LocalContext.current
-    val ordersFlow = if (profile.role == "COMERCIANTE") AppGraph.payments.observeOrders(profile.uid) else kotlinx.coroutines.flow.flowOf(emptyList<OrderEntity>())
-    val orders by ordersFlow.collectAsState(initial = emptyList())
+    val ordersFlow = if (profile.role == "COMERCIANTE" && !isDemo) AppGraph.payments.observeOrders(profile.uid) else kotlinx.coroutines.flow.flowOf(emptyList<OrderEntity>())
+    val observedOrders by ordersFlow.collectAsState(initial = emptyList())
+    val orders = if (isDemo) demoOrders else observedOrders
     val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize().background(Color(0xFFF5F7FA)).padding(18.dp)) {
+        if (isDemo) DemoNotice()
         Text("PEDIDOS Y ENTREGAS", color = Color(0xFF3473CC), fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(5.dp)); Text("Trazabilidad", color = Navy, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(13.dp))
         if (orders.isEmpty()) EmptyCard("Tus pedidos aparecerán aquí al sincronizar con Firestore.")
         else LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
             items(orders, key = { it.orderId }) { order ->
-                OrderCard(order, onDelivered = if (profile.role == "COMERCIANTE") ({ scope.launch { AppGraph.payments.markDelivered(order.orderId); PendingSyncScheduler.request(context) } }) else null)
+                OrderCard(order, onDelivered = if (profile.role == "COMERCIANTE") ({
+                    if (isDemo) onDemoOrdersChange(demoOrders.map { if (it.orderId == order.orderId) it.copy(deliveryStatus = "DELIVERED") else it })
+                    else scope.launch { AppGraph.payments.markDelivered(order.orderId); PendingSyncScheduler.request(context) }
+                }) else null)
             }
         }
     }
 }
 
 @Composable
-private fun ListenerStatusScreen() {
+private fun ListenerStatusScreen(isDemo: Boolean = false) {
     val context = LocalContext.current
     var allowed by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -620,14 +828,18 @@ private fun ListenerStatusScreen() {
         allowed = listeners.contains(context.packageName)
     }
     Column(Modifier.fillMaxSize().background(Color(0xFFF5F7FA)).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (isDemo) DemoNotice()
         Text("CELULAR RECEPTOR", color = Color(0xFF3473CC), fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
         Text("Confirmación bancaria", color = Navy, fontSize = 23.sp, fontWeight = FontWeight.Bold)
         Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
             Column(Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.NotificationsActive, null, tint = if (allowed) Green else Color(0xFFB77C36)); Spacer(Modifier.width(10.dp)); Column { Text(if (allowed) "Permiso activado" else "Permiso pendiente", color = Navy, fontWeight = FontWeight.Bold, fontSize = 13.sp); Text("Acceso a notificaciones de pago", color = Muted, fontSize = 10.sp) } }
                 Text("VeriPago solo lee el texto de las notificaciones de abonos. Nunca solicita claves ni acceso dentro de tu banco.", color = Muted, fontSize = 10.sp, lineHeight = 16.sp)
-                Button(onClick = { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, modifier = Modifier.fillMaxWidth()) { Text(if (allowed) "Administrar permiso" else "Activar escucha bancaria") }
-                if (allowed) OutlinedButton(onClick = { startPaymentListener(context) }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.NotificationsActive, null); Spacer(Modifier.width(6.dp)); Text("Reanudar escucha") }
+                if (isDemo) Text("La demostración no solicita ni modifica permisos del teléfono.", color = Muted, fontSize = 10.sp)
+                else {
+                    Button(onClick = { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }, modifier = Modifier.fillMaxWidth()) { Text(if (allowed) "Administrar permiso" else "Activar escucha bancaria") }
+                    if (allowed) OutlinedButton(onClick = { startPaymentListener(context) }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.NotificationsActive, null); Spacer(Modifier.width(6.dp)); Text("Reanudar escucha") }
+                }
             }
         }
         Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
@@ -641,13 +853,359 @@ private fun ListenerStatusScreen() {
 }
 
 @Composable
+private fun DemoNotice() {
+    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF5E6)), shape = RoundedCornerShape(12.dp)) {
+        Text(
+            "PERFIL DE DEMOSTRACIÓN · No guarda datos ni procesa pagos reales.",
+            color = Color(0xFF855E23),
+            fontSize = 9.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.fillMaxWidth().padding(10.dp),
+        )
+    }
+}
+
+@Composable
 private fun AdminScreen() {
-    val orders by AppGraph.database.orderDao().observeMerchantOrders("__admin__").collectAsState(initial = emptyList())
-    Column(Modifier.fillMaxSize().background(Color(0xFFF5F7FA)).padding(20.dp)) {
-        Text("CONSOLA ADMINISTRADOR", color = Color(0xFF3473CC), fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(5.dp)); Text("Resumen de plataforma", color = Navy, fontSize = 23.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(13.dp)); MiniMetric("Actividad local", "${orders.size} pedidos", Green, Modifier.fillMaxWidth())
-        Spacer(Modifier.height(11.dp)); EmptyCard("El monitoreo global está disponible en la consola web administradora.")
+    val repository = remember { AdminRepository() }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val voiceConfirmation = remember(context) { VoiceConfirmationEngine(context) }
+    DisposableEffect(voiceConfirmation) { onDispose { voiceConfirmation.release() } }
+    var overview by remember { mutableStateOf<AdminOverview?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf("") }
+    fun refresh() {
+        scope.launch {
+            loading = true
+            error = ""
+            runCatching { repository.loadOverview() }
+                .onSuccess { overview = it }
+                .onFailure { error = it.localizedMessage ?: "No se pudo cargar el resumen." }
+            loading = false
+        }
+    }
+    LaunchedEffect(Unit) { refresh() }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().background(Color(0xFFF5F7FA)).padding(horizontal = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(11.dp),
+    ) {
+        item {
+            Column(Modifier.padding(top = 16.dp, bottom = 2.dp)) {
+                Text("CONSOLA DE PLATAFORMA", color = Color(0xFF3473CC), fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(5.dp))
+                Text("Todo conectado.", color = Navy, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text("Monitorea la operación de VeriPago.", color = Muted, fontSize = 11.sp)
+            }
+        }
+        if (error.isNotBlank()) item { AdminInlineError(error) }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MiniMetric("Volumen verificado", formatCop(overview?.verifiedVolume ?: 0L), Green, Modifier.weight(1f))
+                MiniMetric("Pagos conciliados", "${overview?.reconciledPayments ?: 0}", Color(0xFF3473CC), Modifier.weight(1f))
+            }
+        }
+        item {
+            MiniMetric("Comercios registrados", "${overview?.merchantsRegistered ?: 0}", Color(0xFF8057D9), Modifier.fillMaxWidth())
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+                Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.VolumeUp, null, tint = Color(0xFF3475D3))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Prueba de texto a voz", color = Navy, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Text("Escucha cómo suena el aviso de VeriPago. Es una simulación, no un pago real.", color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
+                    Button(onClick = { voiceConfirmation.announceTest() }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.VolumeUp, contentDescription = null)
+                        Spacer(Modifier.width(7.dp))
+                        Text("Probar texto a voz")
+                    }
+                }
+            }
+        }
+        item {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Column {
+                    Text("Actividad reciente", color = Navy, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text("Operación global de VeriPago.", color = Muted, fontSize = 10.sp)
+                }
+                TextButton(onClick = { refresh() }) { Text("Actualizar", fontSize = 11.sp) }
+            }
+        }
+        if (loading && overview == null) item { Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
+        val recentOrders = overview?.orders.orEmpty()
+        if (!loading && recentOrders.isEmpty()) item { EmptyCard("Todavía no hay pedidos registrados.") }
+        items(recentOrders, key = { it.id }) { order -> AdminOrderRow(order) }
+    }
+}
+
+@Composable
+private fun AdminRulesScreen() {
+    val repository = remember { AdminRepository() }
+    val scope = rememberCoroutineScope()
+    var sampleText by rememberSaveable { mutableStateOf("Te llegaron $15.000 de Maria Perez") }
+    var amountRegex by rememberSaveable { mutableStateOf("(?i)(?:lleg(?:ó|o|aron)|recibiste)\\s*\\$?\\s*([0-9][0-9.,]*)") }
+    var senderRegex by rememberSaveable { mutableStateOf("(?i)(?:de|remitente)\\s*[:\\-]?\\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑa-záéíóúñ ]{2,60})") }
+    var parsedText by remember { mutableStateOf<String?>(null) }
+    var rules by remember { mutableStateOf<List<AdminRule>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var saving by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf("") }
+    fun refresh() {
+        scope.launch {
+            loading = true
+            runCatching { repository.loadRules() }
+                .onSuccess { rules = it }
+                .onFailure { error = it.localizedMessage ?: "No se pudieron cargar las reglas." }
+            loading = false
+        }
+    }
+    LaunchedEffect(Unit) { refresh() }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().background(Color(0xFFF5F7FA)).padding(horizontal = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(11.dp),
+    ) {
+        item {
+            Column(Modifier.padding(top = 16.dp, bottom = 2.dp)) {
+                Text("REGLAS REGEX", color = Color(0xFF3473CC), fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(5.dp)); Text("Reglas bancarias", color = Navy, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+                Text("Prueba las expresiones antes de sincronizarlas.", color = Muted, fontSize = 11.sp)
+            }
+        }
+        if (error.isNotBlank()) item { AdminInlineError(error) }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+                Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    OutlinedTextField(sampleText, { sampleText = it }, label = { Text("Texto de notificación") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                    OutlinedTextField(amountRegex, { amountRegex = it }, label = { Text("Expresión para monto") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                    OutlinedTextField(senderRegex, { senderRegex = it }, label = { Text("Expresión para remitente") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = {
+                            parsedText = try {
+                                Regex(amountRegex); Regex(senderRegex)
+                                val rule = BankRuleEntity("preview", "Personalizada", "", amountRegex, senderRegex, true, 0L)
+                                val parsed = BankNotificationParser.parse(sampleText, rule)
+                                if (parsed == null) "Sin coincidencia" else "Monto: ${formatCop(parsed.amount)} · Remitente: ${parsed.sender.ifBlank { "Sin coincidencia" }}"
+                            } catch (_: IllegalArgumentException) { "Regex inválida" }
+                        }, modifier = Modifier.weight(1f)) { Text("Probar reglas", fontSize = 11.sp) }
+                        Button(enabled = !saving, onClick = {
+                            scope.launch {
+                                saving = true; error = ""
+                                runCatching { repository.saveDisabledRule(amountRegex, senderRegex) }
+                                    .onSuccess { parsedText = "Regla guardada desactivada."; refresh() }
+                                    .onFailure { error = it.localizedMessage ?: "No se pudo guardar la regla." }
+                                saving = false
+                            }
+                        }, modifier = Modifier.weight(1f)) { Text(if (saving) "Guardando…" else "Guardar desactivada", fontSize = 10.sp) }
+                    }
+                    parsedText?.let { Text(it, color = if (it == "Regex inválida") Color(0xFFB54747) else Navy, fontSize = 11.sp) }
+                }
+            }
+        }
+        item {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Reglas guardadas", color = Navy, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                TextButton(onClick = { refresh() }) { Text("Actualizar", fontSize = 11.sp) }
+            }
+        }
+        if (loading && rules.isEmpty()) item { Box(Modifier.fillMaxWidth().padding(18.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
+        if (!loading && rules.isEmpty()) item { EmptyCard("Todavía no hay reglas bancarias guardadas.") }
+        items(rules, key = { it.id }) { rule ->
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(13.dp)) {
+                Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(10.dp).clip(CircleShape).background(if (rule.isActive) Green else Muted))
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(rule.walletName.ifBlank { "Personalizada" }, color = Navy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(rule.androidPackage.ifBlank { "Paquete por configurar" }, color = Muted, fontSize = 10.sp)
+                    }
+                    Text(if (rule.isActive) "Activa" else "Desactivada", color = if (rule.isActive) Green else Muted, fontSize = 10.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AdminUsersScreen(currentUser: UserProfile) {
+    val repository = remember { AdminRepository() }
+    val scope = rememberCoroutineScope()
+    var users by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var savingUid by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf("") }
+    fun refresh() {
+        scope.launch {
+            loading = true; error = ""
+            runCatching { repository.loadUsers() }
+                .onSuccess { users = it }
+                .onFailure { error = it.localizedMessage ?: "No se pudieron cargar los usuarios." }
+            loading = false
+        }
+    }
+    LaunchedEffect(Unit) { refresh() }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().background(Color(0xFFF5F7FA)).padding(horizontal = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        item {
+            Row(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Column {
+                    Text("USUARIOS", color = Color(0xFF3473CC), fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(5.dp)); Text("Perfiles registrados", color = Navy, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text("Asigna el rol correcto para cada cuenta.", color = Muted, fontSize = 11.sp)
+                }
+                TextButton(onClick = { refresh() }) { Text("Actualizar", fontSize = 11.sp) }
+            }
+        }
+        if (error.isNotBlank()) item { AdminInlineError(error) }
+        if (loading && users.isEmpty()) item { Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
+        if (!loading && users.isEmpty()) item { EmptyCard("No hay perfiles registrados.") }
+        items(users, key = { it.uid }) { user ->
+            AdminUserCard(user, currentUser.uid, savingUid == user.uid) { role ->
+                scope.launch {
+                    savingUid = user.uid; error = ""
+                    runCatching { repository.updateRole(user.uid, role) }
+                        .onSuccess { refresh() }
+                        .onFailure { error = it.localizedMessage ?: "No se pudo actualizar el rol." }
+                    savingUid = null
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AdminUserCard(user: UserProfile, currentUid: String, saving: Boolean, onRoleChange: (String) -> Unit) {
+    var expanded by remember(user.uid) { mutableStateOf(false) }
+    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
+        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (user.photoUrl.isNotBlank()) {
+                AsyncImage(user.photoUrl, contentDescription = "Foto de ${user.displayName}", modifier = Modifier.size(42.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+            } else {
+                Box(Modifier.size(42.dp).clip(CircleShape).background(Color(0xFFEAF2FF)), contentAlignment = Alignment.Center) {
+                    Text(user.displayName.firstOrNull()?.uppercase() ?: "G", color = Navy, fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(user.displayName.ifBlank { "Usuario VeriPago" }, color = Navy, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Text(user.email, color = Muted, fontSize = 9.sp, maxLines = 1)
+            }
+            Box {
+                TextButton(enabled = currentUid != user.uid && !saving, onClick = { expanded = true }) {
+                    Text(if (saving) "Guardando…" else if (user.role == "ADMINISTRADOR") "Administrador" else "Comerciante", fontSize = 9.sp, maxLines = 1)
+                }
+                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    listOf("COMERCIANTE" to "Comerciante", "ADMINISTRADOR" to "Administrador").forEach { (role, label) ->
+                        DropdownMenuItem(text = { Text(label) }, onClick = { expanded = false; onRoleChange(role) })
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AdminPlatformScreen() {
+    val repository = remember { AdminRepository() }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    var release by remember { mutableStateOf<PlatformRelease?>(null) }
+    var selectedApk by remember { mutableStateOf<Uri?>(null) }
+    var version by rememberSaveable { mutableStateOf(BuildConfig.VERSION_NAME) }
+    var loading by remember { mutableStateOf(true) }
+    var saving by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf("") }
+    val apkPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { selectedApk = it }
+    fun refresh() {
+        scope.launch {
+            loading = true; error = ""
+            runCatching { repository.loadPlatformRelease() }
+                .onSuccess { release = it }
+                .onFailure { error = it.localizedMessage ?: "No se pudo cargar la versión publicada." }
+            loading = false
+        }
+    }
+    LaunchedEffect(Unit) { refresh() }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().background(Color(0xFFF5F7FA)).padding(horizontal = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(11.dp),
+    ) {
+        item {
+            Column(Modifier.padding(top = 16.dp, bottom = 2.dp)) {
+                Text("PLATAFORMA", color = Color(0xFF3473CC), fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(5.dp)); Text("App Android", color = Navy, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+                Text("Actualiza el APK ofrecido para descarga.", color = Muted, fontSize = 11.sp)
+            }
+        }
+        if (error.isNotBlank()) item { AdminInlineError(error) }
+        if (message.isNotBlank()) item { Text(message, color = Green, fontSize = 11.sp) }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                    Text("Versión publicada", color = Navy, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    if (loading) CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    else if (release == null || release?.url.isNullOrBlank()) Text("No hay una versión publicada.", color = Muted, fontSize = 11.sp)
+                    else {
+                        Text("${release?.version.orEmpty()} · ${release?.notes.orEmpty()}", color = Muted, fontSize = 11.sp)
+                        Text("El archivo ya está disponible en Storage.", color = Green, fontSize = 10.sp)
+                    }
+                }
+            }
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                    Text("Publicar app Android", color = Navy, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text("Selecciona el APK y confirma la versión que se mostrará en la web.", color = Muted, fontSize = 10.sp)
+                    OutlinedTextField(version, { version = it }, label = { Text("Versión") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedButton(onClick = { apkPicker.launch(arrayOf("application/vnd.android.package-archive", "application/octet-stream")) }, modifier = Modifier.fillMaxWidth()) {
+                        Text(selectedApk?.lastPathSegment?.substringAfterLast(':') ?: "Seleccionar archivo APK", maxLines = 1)
+                    }
+                    Button(enabled = !saving && selectedApk != null, onClick = {
+                        val uri = selectedApk ?: return@Button
+                        scope.launch {
+                            saving = true; error = ""; message = ""
+                            runCatching { repository.publishApk(context, uri, version) }
+                                .onSuccess { release = it; selectedApk = null; message = "La versión quedó publicada." }
+                                .onFailure { error = it.localizedMessage ?: "No se pudo publicar el APK." }
+                            saving = false
+                        }
+                    }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (saving) "Publicando…" else "Publicar versión")
+                    }
+                    Text("El APK estará disponible públicamente desde Storage.", color = Muted, fontSize = 10.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AdminOrderRow(order: AdminOrderItem) {
+    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(13.dp)) {
+        Row(Modifier.fillMaxWidth().padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(order.customerName.ifBlank { "Pedido ${order.orderCode}" }, color = Navy, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Text("${order.orderCode} · ${order.paymentStatus.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }}", color = Muted, fontSize = 9.sp, maxLines = 1)
+            }
+            Text(formatCop(order.totalAmount), color = Navy, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun AdminInlineError(message: String) {
+    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF0F0)), shape = RoundedCornerShape(12.dp)) {
+        Text(message, Modifier.fillMaxWidth().padding(12.dp), color = Color(0xFFB54747), fontSize = 11.sp)
     }
 }
 

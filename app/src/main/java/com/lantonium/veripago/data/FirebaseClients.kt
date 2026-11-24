@@ -8,9 +8,11 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.storage.FirebaseStorage
 import com.lantonium.veripago.BuildConfig
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.tasks.await
 
@@ -40,6 +42,17 @@ object FirebaseClients {
 
     val isConfigured: Boolean get() = app != null
 
+    suspend fun getUserProfile(uid: String) = retryFirestoreCall {
+        val database = firestore ?: error("Firestore no está disponible.")
+        database.collection("users").document(uid).get().await()
+    }
+
+    suspend fun updateLastLogin(uid: String) = retryFirestoreCall {
+        val database = firestore ?: error("Firestore no está disponible.")
+        database.collection("users").document(uid)
+            .update("lastLoginAt", com.google.firebase.firestore.FieldValue.serverTimestamp()).await()
+    }
+
     fun initialize(context: Context) {
         if (app != null || BuildConfig.FIREBASE_API_KEY.isBlank() || BuildConfig.FIREBASE_PROJECT_ID.isBlank() || BuildConfig.FIREBASE_APP_ID.isBlank()) return
         val options = FirebaseOptions.Builder()
@@ -54,6 +67,21 @@ object FirebaseClients {
         functions = FirebaseFunctions.getInstance(app!!, "us-central1")
         storage = FirebaseStorage.getInstance(app!!)
     }
+}
+
+private suspend fun <T> retryFirestoreCall(operation: suspend () -> T): T {
+    repeat(3) { attempt ->
+        try {
+            return operation()
+        } catch (exception: FirebaseFirestoreException) {
+            val retryable = exception.code == FirebaseFirestoreException.Code.UNAVAILABLE ||
+                exception.code == FirebaseFirestoreException.Code.DEADLINE_EXCEEDED ||
+                exception.message?.contains("client is offline", ignoreCase = true) == true
+            if (!retryable || attempt == 2) throw exception
+            delay(500L * (attempt + 1))
+        }
+    }
+    error("No se pudo completar la solicitud de Firestore.")
 }
 
 class ProfileCache(private val context: Context) {
@@ -88,9 +116,7 @@ class GoogleAuthRepository(private val context: Context, private val cache: Prof
         val auth = FirebaseClients.auth ?: error("Firebase no está configurado en este build.")
         val result = auth.signInWithCredential(com.google.firebase.auth.GoogleAuthProvider.getCredential(idToken, null)).await()
         val user = result.user ?: error("Google no devolvió un usuario.")
-        val database = FirebaseClients.firestore ?: error("Firestore no está disponible.")
-        val reference = database.collection("users").document(user.uid)
-        val snapshot = reference.get().await()
+        val snapshot = FirebaseClients.getUserProfile(user.uid)
         if (!snapshot.exists()) {
             auth.signOut()
             error("Primero registra tu perfil de comerciante en la web de VeriPago.")
@@ -104,7 +130,7 @@ class GoogleAuthRepository(private val context: Context, private val cache: Prof
             auth.signOut()
             error("Tu perfil VeriPago está desactivado.")
         }
-        reference.update("lastLoginAt", com.google.firebase.firestore.FieldValue.serverTimestamp()).await()
+        FirebaseClients.updateLastLogin(user.uid)
         val profile = UserProfile(user.uid, snapshot.getString("email").orEmpty(), snapshot.getString("displayName").orEmpty(),
             snapshot.getString("photoUrl").orEmpty(), role, true, snapshot.getLong("loyaltyPoints") ?: 0L)
         cache.save(profile)
@@ -112,7 +138,6 @@ class GoogleAuthRepository(private val context: Context, private val cache: Prof
     }
 
     suspend fun updateLastLogin(profile: UserProfile) {
-        FirebaseClients.firestore?.collection("users")?.document(profile.uid)
-            ?.update("lastLoginAt", com.google.firebase.firestore.FieldValue.serverTimestamp())?.await()
+        FirebaseClients.updateLastLogin(profile.uid)
     }
 }

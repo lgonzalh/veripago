@@ -1,7 +1,7 @@
 <resources>
     <style name="Theme.VeriPago.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#071A32</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_veripago_splash</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/veripago_mark</item>
         <item name="postSplashScreenTheme">@style/Theme.VeriPago</item>
     </style>
     <style name="Theme.VeriPago" parent="android:style/Theme.Material.Light.NoActionBar">
