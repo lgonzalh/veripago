@@ -6,6 +6,7 @@ import {
   beforeAll,
   beforeEach,
   describe,
+  expect,
   it,
 } from 'vitest'
 import {
@@ -111,6 +112,7 @@ describe('Firestore security rules', () => {
     await seedUser('merchant-catalog-1', 'COMERCIANTE')
     await seedUser('merchant-catalog-2', 'COMERCIANTE')
     const product = {
+      merchantId: 'merchant-catalog-1',
       name: 'Café',
       enteredPrice: 100_000,
       vatRate: 19,
@@ -120,17 +122,19 @@ describe('Firestore security rules', () => {
       priceWithVat: 119_000,
     }
     await testEnv.withSecurityRulesDisabled(async (context) => {
-      await setDoc(doc(context.firestore(), 'users', 'merchant-catalog-2', 'products', 'private-item'), product)
+      await setDoc(doc(context.firestore(), 'users', 'merchant-catalog-2', 'products', 'private-item'), { ...product, merchantId: 'merchant-catalog-2' })
     })
 
     const merchant = googleUser('merchant-catalog-1')
     const ownCatalog = collection(merchant, 'users', 'merchant-catalog-1', 'products')
     await assertSucceeds(setDoc(doc(ownCatalog, 'coffee'), product))
-    await assertSucceeds(getDoc(doc(ownCatalog, 'coffee')))
+    const savedProduct = await assertSucceeds(getDoc(doc(ownCatalog, 'coffee')))
+    expect(savedProduct.data()?.merchantId).toBe('merchant-catalog-1')
     await assertSucceeds(getDocs(ownCatalog))
     await assertFails(getDoc(doc(merchant, 'users', 'merchant-catalog-2', 'products', 'private-item')))
     await assertFails(getDocs(collection(merchant, 'users', 'merchant-catalog-2', 'products')))
-    await assertFails(setDoc(doc(merchant, 'users', 'merchant-catalog-2', 'products', 'stolen-item'), product))
+    await assertFails(setDoc(doc(merchant, 'users', 'merchant-catalog-2', 'products', 'stolen-item'), { ...product, merchantId: 'merchant-catalog-2' }))
+    await assertFails(setDoc(doc(ownCatalog, 'wrong-owner'), { ...product, merchantId: 'merchant-catalog-2' }))
     await assertFails(setDoc(doc(ownCatalog, 'invalid-vat'), { ...product, priceWithVat: 100_000 }))
   })
 

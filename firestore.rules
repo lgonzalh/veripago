@@ -18,11 +18,16 @@ service cloud.firestore {
 
     function isAdmin() { return hasRole('ADMINISTRADOR'); }
     function isMerchant(uid) { return hasRole('COMERCIANTE') && request.auth.uid == uid; }
-    function validMerchantProduct(data) {
+    function validMerchantProduct(data, uid) {
       return data.keys().hasOnly([
-          'name', 'enteredPrice', 'vatRate', 'priceIncludesVat',
+          'merchantId', 'name', 'enteredPrice', 'vatRate', 'priceIncludesVat',
           'priceWithoutVat', 'vatAmount', 'priceWithVat'
         ])
+        && data.keys().hasAll([
+          'merchantId', 'name', 'enteredPrice', 'vatRate', 'priceIncludesVat',
+          'priceWithoutVat', 'vatAmount', 'priceWithVat'
+        ])
+        && data.merchantId == uid
         && data.name is string
         && data.name.size() > 0
         && data.name.size() <= 100
@@ -185,7 +190,7 @@ service cloud.firestore {
       match /products/{productId} {
         // Catalogs are private: only the authenticated merchant who owns this user path can read or change them.
         allow get, list: if isMerchant(uid);
-        allow create, update: if isMerchant(uid) && validMerchantProduct(request.resource.data);
+        allow create, update: if isMerchant(uid) && validMerchantProduct(request.resource.data, uid);
         allow delete: if isMerchant(uid);
       }
 

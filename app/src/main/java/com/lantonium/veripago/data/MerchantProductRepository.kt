@@ -34,7 +34,14 @@ class MerchantProductRepository(
     suspend fun load(uid: String): List<MerchantProduct> {
         val db = firestore
         if (db != null) {
-            runCatching { products(uid).get().await() }.onSuccess { snapshot ->
+            runCatching {
+                val snapshot = products(uid).get().await()
+                // Backfill the explicit relationship on legacy product documents.
+                snapshot.documents.filter { it.getString("merchantId") != uid }.forEach { doc ->
+                    doc.reference.set(mapOf("merchantId" to uid), com.google.firebase.firestore.SetOptions.merge()).await()
+                }
+                snapshot
+            }.onSuccess { snapshot ->
                 val remoteIds = snapshot.documents.mapTo(mutableSetOf()) { it.id }
                 val pendingIds = database.pendingSyncDao().pendingIds("merchant_products", "$uid|%").mapTo(mutableSetOf()) { it.substringAfter('|') }
                 database.withTransaction {
@@ -57,6 +64,7 @@ class MerchantProductRepository(
         val saved = product.copy(id = product.id.ifBlank { UUID.randomUUID().toString() })
         val entity = saved.toEntity(uid)
         val data = JSONObject().apply {
+            put("merchantId", uid)
             put("name", saved.name)
             put("enteredPrice", saved.enteredPrice)
             put("vatRate", saved.vatRate)
