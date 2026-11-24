@@ -1004,7 +1004,7 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
                         },
                         modifier = Modifier.fillMaxWidth().height(45.dp), shape = RoundedCornerShape(11.dp),
                     ) { Icon(Icons.Default.Link, null); Spacer(Modifier.width(7.dp)); Text("Compartir por WhatsApp") }
-                    Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.CheckCircle, null, tint = Green, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(6.dp)); Text("Tu dinero llega directo a tu billetera. 0% comisión.", color = Muted, fontSize = 9.sp) }
+                    Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.CheckCircle, null, tint = Green, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(6.dp)); Text("Tu dinero llega directo a tu billetera. 0% comisión de VeriPago; Nequi, DaviPlata o Bre-B podrían cobrar la suya.", color = Muted, fontSize = 8.sp, lineHeight = 12.sp, modifier = Modifier.weight(1f)) }
                 }
             }
         }
