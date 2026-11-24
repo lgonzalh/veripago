@@ -152,17 +152,16 @@ describe('Firestore security rules', () => {
     await seedUser('merchant-qr-1', 'COMERCIANTE')
     await seedUser('merchant-qr-2', 'COMERCIANTE')
     const merchant = googleUser('merchant-qr-1')
+    const link = {
+      merchantId: 'merchant-qr-1',
+      slug: 'qr-link',
+      defaultMode: 'IN_SITU_QR',
+      isActive: true,
+      title: 'Cobro rápido',
+      paymentMethods: [{ provider: 'OTHER', qrImageUrl: 'https://example.test/old.png', paymentKeyLabel: '', beneficiaryName: '' }],
+    }
     await testEnv.withSecurityRulesDisabled(async (context) => {
-      const db = context.firestore()
-      const link = {
-        merchantId: 'merchant-qr-1',
-        slug: 'qr-link',
-        defaultMode: 'IN_SITU_QR',
-        isActive: true,
-        paymentMethods: [{ provider: 'OTHER', qrImageUrl: 'https://example.test/old.png', paymentKeyLabel: '', beneficiaryName: '' }],
-      }
-      await setDoc(doc(db, 'payment_links', 'qr-link'), link)
-      await setDoc(doc(db, 'public_payment_links', 'qr-link'), { ...link, linkId: 'qr-link' })
+      await setDoc(doc(context.firestore(), 'payment_links', 'qr-link'), link)
     })
     const qr = {
       provider: 'NEQUI',
@@ -186,7 +185,7 @@ describe('Firestore security rules', () => {
       updatedAt: serverTimestamp(),
     }
     batch.update(doc(merchant, 'payment_links', 'qr-link'), linkUpdate)
-    batch.update(doc(merchant, 'public_payment_links', 'qr-link'), linkUpdate)
+    batch.set(doc(merchant, 'public_payment_links', 'qr-link'), { ...link, ...linkUpdate, linkId: 'qr-link' })
     await assertSucceeds(batch.commit())
     await assertFails(getDoc(doc(merchant, 'users', 'merchant-qr-2', 'wallet_qrs', 'NEQUI')))
     await assertFails(setDoc(doc(merchant, 'users', 'merchant-qr-2', 'wallet_qrs', 'NEQUI'), qr))

@@ -97,6 +97,16 @@ service cloud.firestore {
           'paymentMethods', 'paymentProvider', 'qrImageUrl', 'paymentKeyLabel', 'beneficiaryName', 'updatedAt'
         ]);
     }
+    function validPublicPaymentLinkMirrorCreate(uid, slug) {
+      let linkId = request.resource.data.get('linkId', '');
+      let privateLink = getAfter(/databases/$(database)/documents/payment_links/$(linkId));
+      return linkId is string
+        && linkId.size() > 0
+        && privateLink.data.merchantId == uid
+        && privateLink.data.slug == slug
+        && request.resource.data.diff(privateLink.data).affectedKeys().hasOnly(['linkId'])
+        && request.resource.data.linkId == linkId;
+    }
     function validDeliveredItemProgress() {
       return resource.data.paymentStatus in ['VERIFIED_AUTO', 'VERIFIED_MANUAL']
         && request.resource.data.paymentStatus == resource.data.paymentStatus
@@ -222,7 +232,11 @@ service cloud.firestore {
             && validMerchantAdjustments(request.resource.data.adjustments))
           || validMerchantQrLinkUpdate(resource.data.merchantId)
         );
-      allow create, delete: if false;
+      // A merchant may repair a missing public mirror only by writing the exact private link
+      // state committed in the same batch. This cannot publish arbitrary checkout documents.
+      allow create: if isMerchant(request.resource.data.merchantId)
+        && validPublicPaymentLinkMirrorCreate(request.auth.uid, slug);
+      allow delete: if false;
     }
 
     match /orders/{orderId} {

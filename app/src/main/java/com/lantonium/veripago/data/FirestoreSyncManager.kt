@@ -239,7 +239,11 @@ class FirestoreSyncManager(private val database: VeriPagoDatabase) {
             batch.update(link.reference, update)
             val slug = link.getString("slug")?.takeIf { it.isNotBlank() }
                 ?: error("No se pudo actualizar la vista de cobro del comercio.")
-            batch.update(firestore.collection("public_payment_links").document(slug), update)
+            // `update()` fails with NOT_FOUND when an older checkout is missing its public mirror.
+            // Set the complete mirror; an existing document changes only the QR fields, while a
+            // missing document can be securely restored from its private link in this batch.
+            val publicMirror = link.data.orEmpty() + update + ("linkId" to link.id)
+            batch.set(firestore.collection("public_payment_links").document(slug), publicMirror)
         }
         batch.commit().await()
     }
