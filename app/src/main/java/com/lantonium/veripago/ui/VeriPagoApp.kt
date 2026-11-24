@@ -1201,7 +1201,7 @@ private fun MerchantScreen(
                     if (!compactCharge) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.CheckCircle, null, tint = Green, modifier = Modifier.size(13.dp)); Spacer(Modifier.width(5.dp))
-                            Text("Directo a tu billetera · 0% comisión", color = Muted, fontSize = DesignTokens.bodyText, lineHeight = 20.sp, maxLines = 2, modifier = Modifier.weight(1f))
+                            Text("Directo a tu billetera · 0% comisión", color = Muted, fontSize = DesignTokens.fieldLabel, lineHeight = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         }
                     }
                 }
@@ -1393,10 +1393,7 @@ private fun MerchantCatalogScreen(
         AppCard {
             Column(Modifier.fillMaxWidth().padding(if (compact) 8.dp else 10.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 4.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Ajustes del negocio", color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold, maxLines = 1)
-                        Text("Ajuste interno sumado al total", color = Muted, fontSize = DesignTokens.bodyText, lineHeight = 20.sp, maxLines = 2)
-                    }
+                    Text("Ajustes del negocio", modifier = Modifier.weight(1f), color = Navy, fontSize = DesignTokens.bodyText, fontWeight = FontWeight.Bold, maxLines = 1)
                     AppButton(
                         enabled = !savingAdjustments,
                         onClick = {
@@ -1425,6 +1422,7 @@ private fun MerchantCatalogScreen(
                         modifier = Modifier,
                     ) { Text(if (savingAdjustments) "…" else "Guardar", fontSize = DesignTokens.bodyText) }
                 }
+                Text("Ajuste interno sumado al total", color = Muted, fontSize = DesignTokens.fieldLabel, lineHeight = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(Color(0xFFF7F9FC)).padding(6.dp)) {
                         AdjustmentEditor("Por producto", perProductEnabledDraft, { perProductEnabledDraft = it }, perProductModeDraft, { perProductModeDraft = it }, perProductValueDraft, { perProductValueDraft = it })

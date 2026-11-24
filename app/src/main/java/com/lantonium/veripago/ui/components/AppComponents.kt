@@ -48,6 +48,7 @@ fun AppCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Card(
         modifier = modifier,
         shape = VeriPagoShapes.card,
+        border = DesignTokens.standardBorder(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         content = { content() },
     )
@@ -89,7 +90,7 @@ fun VeriNotchedContainer(
 
 /** Fixed geometry for all one-line form fields. The label sits in the top border notch. */
 @Composable
-fun VeriFixedTextField(
+fun AppTextField(
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -157,6 +158,18 @@ fun VeriFixedTextField(
         }
 }
 
+/** Fixed-size app input used by all form screens. */
+@Composable
+fun VeriFixedTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    label: String? = null,
+    placeholder: String? = null,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    enabled: Boolean = true,
+) = AppTextField(value, onValueChange, modifier, label, placeholder, keyboardOptions, enabled)
+
 /** Consistent drop-down selector styled to match the fixed text field. */
 @Composable
 fun <T> VeriFixedSelector(
@@ -207,6 +220,7 @@ fun AppButton(
         modifier = modifier.height(DesignTokens.controlHeight),
         enabled = enabled,
         shape = VeriPagoShapes.control,
+        border = DesignTokens.standardBorder(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         content = content,
     )
@@ -224,7 +238,7 @@ fun AppOutlinedButton(
         modifier = modifier.height(DesignTokens.controlHeight),
         enabled = enabled,
         shape = VeriPagoShapes.control,
-        border = BorderStroke(DesignTokens.outlineWidth, MaterialTheme.colorScheme.outlineVariant),
+        border = DesignTokens.standardBorder(),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         content = content,
     )
