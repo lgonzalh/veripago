@@ -24,6 +24,7 @@ import {
   setDoc,
   updateDoc,
   Timestamp,
+  writeBatch,
 } from 'firebase/firestore'
 import { getBytes, ref, uploadBytes } from 'firebase/storage'
 
@@ -145,6 +146,61 @@ describe('Firestore security rules', () => {
       whatsappNumber: '+573001234567',
       updatedAt: serverTimestamp(),
     }))
+  })
+
+  it('saves QR images privately for the owner and exposes only their checkout preview', async () => {
+    await seedUser('merchant-qr-1', 'COMERCIANTE')
+    await seedUser('merchant-qr-2', 'COMERCIANTE')
+    const merchant = googleUser('merchant-qr-1')
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      const link = {
+        merchantId: 'merchant-qr-1',
+        slug: 'qr-link',
+        defaultMode: 'IN_SITU_QR',
+        isActive: true,
+        paymentMethods: [{ provider: 'OTHER', qrImageUrl: 'https://example.test/old.png', paymentKeyLabel: '', beneficiaryName: '' }],
+      }
+      await setDoc(doc(db, 'payment_links', 'qr-link'), link)
+      await setDoc(doc(db, 'public_payment_links', 'qr-link'), { ...link, linkId: 'qr-link' })
+    })
+    const qr = {
+      provider: 'NEQUI',
+      contentType: 'image/png',
+      imageBase64: 'iVBORw0KGgo=',
+      paymentKeyLabel: 'Mi cuenta',
+      beneficiaryName: 'Comercio',
+      updatedAt: serverTimestamp(),
+    }
+
+    const batch = writeBatch(merchant)
+    const paymentMethod = { provider: 'NEQUI', qrImageUrl: 'veripagoqr://merchant-qr-1/NEQUI', paymentKeyLabel: 'Mi cuenta', beneficiaryName: 'Comercio' }
+    batch.set(doc(merchant, 'users', 'merchant-qr-1', 'wallet_qrs', 'NEQUI'), qr)
+    batch.set(doc(merchant, 'public_merchant_qrs', 'merchant-qr-1', 'wallets', 'NEQUI'), qr)
+    const linkUpdate = {
+      paymentMethods: [paymentMethod],
+      paymentProvider: 'NEQUI',
+      qrImageUrl: paymentMethod.qrImageUrl,
+      paymentKeyLabel: paymentMethod.paymentKeyLabel,
+      beneficiaryName: paymentMethod.beneficiaryName,
+      updatedAt: serverTimestamp(),
+    }
+    batch.update(doc(merchant, 'payment_links', 'qr-link'), linkUpdate)
+    batch.update(doc(merchant, 'public_payment_links', 'qr-link'), linkUpdate)
+    await assertSucceeds(batch.commit())
+    await assertFails(getDoc(doc(merchant, 'users', 'merchant-qr-2', 'wallet_qrs', 'NEQUI')))
+    await assertFails(setDoc(doc(merchant, 'users', 'merchant-qr-2', 'wallet_qrs', 'NEQUI'), qr))
+    await assertFails(setDoc(doc(merchant, 'users', 'merchant-qr-1', 'wallet_qrs', 'UNKNOWN'), { ...qr, provider: 'UNKNOWN' }))
+    await assertFails(setDoc(doc(merchant, 'users', 'merchant-qr-1', 'wallet_qrs', 'DAVIPLATA'), {
+      ...qr,
+      provider: 'DAVIPLATA',
+      imageBase64: 'x'.repeat(750_001),
+    }))
+
+    const guest = testEnv.unauthenticatedContext().firestore()
+    await assertSucceeds(getDoc(doc(guest, 'public_merchant_qrs', 'merchant-qr-1', 'wallets', 'NEQUI')))
+    await assertFails(getDocs(collection(guest, 'public_merchant_qrs', 'merchant-qr-1', 'wallets')))
+    await assertFails(getDoc(doc(guest, 'users', 'merchant-qr-1', 'wallet_qrs', 'NEQUI')))
   })
 
   it('allows a merchant to save valid adjustments only to its own settings and payment links', async () => {

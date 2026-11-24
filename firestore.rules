@@ -64,6 +64,39 @@ service cloud.firestore {
         && validAdjustmentRule(data.perProduct)
         && validAdjustmentRule(data.perOrder);
     }
+    function validMerchantQr(data, provider) {
+      return provider in ['NEQUI', 'DAVIPLATA', 'BRE_B']
+        && data.keys().hasOnly([
+          'provider', 'contentType', 'imageBase64', 'paymentKeyLabel', 'beneficiaryName', 'updatedAt'
+        ])
+        && data.provider == provider
+        && data.contentType == 'image/png'
+        && data.imageBase64 is string
+        && data.imageBase64.size() > 0
+        && data.imageBase64.size() <= 750000
+        && data.paymentKeyLabel is string
+        && data.paymentKeyLabel.size() <= 100
+        && data.beneficiaryName is string
+        && data.beneficiaryName.size() <= 100
+        && data.updatedAt == request.time;
+    }
+    function validMerchantQrLinkUpdate(uid) {
+      return resource.data.defaultMode == 'IN_SITU_QR'
+        && request.resource.data.defaultMode == 'IN_SITU_QR'
+        && request.resource.data.paymentProvider in ['NEQUI', 'DAVIPLATA', 'BRE_B']
+        && request.resource.data.qrImageUrl == 'veripagoqr://' + uid + '/' + request.resource.data.paymentProvider
+        && validMerchantQr(
+          getAfter(/databases/$(database)/documents/users/$(uid)/wallet_qrs/$(request.resource.data.paymentProvider)).data,
+          request.resource.data.paymentProvider
+        )
+        && request.resource.data.paymentMethods is list
+        && request.resource.data.paymentMethods.size() > 0
+        && request.resource.data.paymentMethods.size() <= 3
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'paymentMethods', 'paymentProvider', 'qrImageUrl', 'paymentKeyLabel', 'beneficiaryName', 'updatedAt'
+        ]);
+    }
     function validDeliveredItemProgress() {
       return resource.data.paymentStatus in ['VERIFIED_AUTO', 'VERIFIED_MANUAL']
         && request.resource.data.paymentStatus == resource.data.paymentStatus
@@ -145,6 +178,22 @@ service cloud.firestore {
         allow create, update: if isMerchant(uid) && validMerchantProduct(request.resource.data);
         allow delete: if isMerchant(uid);
       }
+
+      match /wallet_qrs/{provider} {
+        allow get, list: if isMerchant(uid);
+        allow create, update: if isMerchant(uid) && validMerchantQr(request.resource.data, provider);
+        allow delete: if isMerchant(uid);
+      }
+    }
+
+    match /public_merchant_qrs/{uid}/wallets/{provider} {
+      // Customers use these images only after receiving a merchant's payment link or QR.
+      allow get: if resource.data.provider == provider
+        && resource.data.contentType == 'image/png'
+        && resource.data.imageBase64 is string;
+      allow list: if false;
+      allow create, update: if isMerchant(uid) && validMerchantQr(request.resource.data, provider);
+      allow delete: if isMerchant(uid);
     }
 
     match /payment_links/{linkId} {
@@ -153,10 +202,12 @@ service cloud.firestore {
       // Creation and slug reservation run in a trusted transaction to enforce uniqueness.
       allow create: if false;
       allow update: if isMerchant(resource.data.merchantId)
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['adjustments', 'updatedAt'])
-        && request.resource.data.updatedAt == request.time
-        && validMerchantAdjustments(request.resource.data.adjustments);
+        && (
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['adjustments', 'updatedAt'])
+            && request.resource.data.updatedAt == request.time
+            && validMerchantAdjustments(request.resource.data.adjustments))
+          || validMerchantQrLinkUpdate(resource.data.merchantId)
+        );
       allow delete: if false;
     }
 
@@ -165,10 +216,12 @@ service cloud.firestore {
       allow get: if resource.data.isActive == true;
       allow list: if false;
       allow update: if isMerchant(resource.data.merchantId)
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['adjustments', 'updatedAt'])
-        && request.resource.data.updatedAt == request.time
-        && validMerchantAdjustments(request.resource.data.adjustments);
+        && (
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['adjustments', 'updatedAt'])
+            && request.resource.data.updatedAt == request.time
+            && validMerchantAdjustments(request.resource.data.adjustments))
+          || validMerchantQrLinkUpdate(resource.data.merchantId)
+        );
       allow create, delete: if false;
     }
 
