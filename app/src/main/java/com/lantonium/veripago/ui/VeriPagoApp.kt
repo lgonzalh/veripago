@@ -282,7 +282,7 @@ fun VeriPagoApp(activity: Activity) {
         topBar = {
             TopAppBar(
                 navigationIcon = {
-                    if (!loading && currentRoute == "acerca") IconButton(onClick = { nav.popBackStack() }) {
+                    if (!loading && currentRoute in setOf("acerca", "perfil")) IconButton(onClick = { nav.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
                     }
                 },
@@ -300,7 +300,7 @@ fun VeriPagoApp(activity: Activity) {
                     }
                 } },
                 actions = {
-                    if (!loading && currentRoute != "acerca") IconButton(
+                    if (!loading && currentRoute !in setOf("acerca", "perfil")) IconButton(
                         onClick = { nav.navigate("acerca") },
                         modifier = Modifier.clip(CircleShape).background(Color(0xFF2168D4)).size(40.dp),
                     ) {
@@ -312,12 +312,12 @@ fun VeriPagoApp(activity: Activity) {
                             AsyncImage(
                                 model = signedInProfile.photoUrl,
                                 contentDescription = "Cuenta de Google de ${signedInProfile.displayName} (${signedInProfile.email})",
-                                modifier = Modifier.size(36.dp).clip(CircleShape),
+                                modifier = Modifier.size(36.dp).clip(CircleShape).clickable { nav.navigate("perfil") },
                                 contentScale = ContentScale.Crop,
                             )
                         } else {
                             Box(
-                                modifier = Modifier.size(36.dp).clip(CircleShape).background(Navy),
+                                modifier = Modifier.size(36.dp).clip(CircleShape).background(Navy).clickable { nav.navigate("perfil") },
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(signedInProfile.displayName.firstOrNull()?.uppercase() ?: "G", color = Color.White, fontWeight = FontWeight.Bold)
@@ -418,6 +418,7 @@ fun VeriPagoApp(activity: Activity) {
                     }
                 }
                 composable("acerca") { AboutScreen() }
+                composable("perfil") { profile?.let { ProfileScreen(it) } }
                 composable("pedidos") { profile?.let { OrdersScreen(it, demoOrders, { demoOrders = it }) } }
                 composable("estado") { ListenerStatusScreen(isDemo = profile?.let(::isDemoMerchant) == true) }
                 composable("reglas") { if (profile?.role == "ADMINISTRADOR") AdminRulesScreen() else profile?.let { MerchantScreen(it, demoOrders, { demoOrders = it }, onError = { error = it }) } }
@@ -515,6 +516,47 @@ private fun FeatureLine(icon: androidx.compose.ui.graphics.vector.ImageVector, l
             Icon(icon, null, tint = Color(0xFF3578D8), modifier = Modifier.size(18.dp))
         }
         Spacer(Modifier.width(10.dp)); Text(label, color = Navy, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun ProfileScreen(profile: UserProfile) {
+    Column(
+        Modifier.fillMaxSize().background(Color(0xFFF5F7FA)).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        if (isDemoMerchant(profile)) DemoNotice()
+        Text("PERFIL", color = Color(0xFF3473CC), fontSize = 9.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
+        Text("Tu cuenta VeriPago", color = Navy, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+            Row(Modifier.fillMaxWidth().padding(17.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (profile.photoUrl.isNotBlank()) {
+                    AsyncImage(profile.photoUrl, contentDescription = "Foto de ${profile.displayName}", modifier = Modifier.size(56.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+                } else {
+                    Box(Modifier.size(56.dp).clip(CircleShape).background(Navy), contentAlignment = Alignment.Center) {
+                        Text(profile.displayName.firstOrNull()?.uppercase() ?: "G", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Spacer(Modifier.width(13.dp))
+                Column {
+                    Text(profile.displayName.ifBlank { "Usuario de Google" }, color = Navy, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(profile.email, color = Muted, fontSize = 11.sp)
+                }
+            }
+        }
+        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+            Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Text("Nombre de Google", color = Muted, fontSize = 10.sp)
+                Text(profile.displayName.ifBlank { "Usuario de Google" }, color = Navy, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text("Este nombre viene de tu cuenta de Google y no se edita en VeriPago.", color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
+                Spacer(Modifier.height(5.dp))
+                Text("Correo", color = Muted, fontSize = 10.sp)
+                Text(profile.email, color = Navy, fontSize = 13.sp)
+                Spacer(Modifier.height(5.dp))
+                Text("Tipo de cuenta", color = Muted, fontSize = 10.sp)
+                Text(if (profile.role == "ADMINISTRADOR") "Administrador" else "Comerciante", color = Navy, fontSize = 13.sp)
+            }
+        }
     }
 }
 
