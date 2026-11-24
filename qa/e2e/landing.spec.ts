@@ -5,10 +5,13 @@ test('landing page loads from the VeriPago subpath', async ({ page }) => {
 
   await expect(page).toHaveTitle(/VeriPago/)
   await expect(page.getByRole('heading', { name: /El pago llega\./ })).toBeVisible()
-  await expect(page.getByText('DaviPlata', { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('img', { name: 'DaviPlata' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Muestra el QR y cobra' })).toBeVisible()
   await expect(page.locator('.brand-lockup')).toHaveCSS('width', '58px')
   await expect(page.locator('.wallet-pills img')).toHaveCount(3)
+  await expect(page.locator('.wallet-pills')).toHaveText('')
+  await expect(page.locator('.wallet-pills img').first()).toHaveCSS('border-radius', '50%')
+  await expect(page.locator('.wallet-pills img').first()).toHaveCSS('width', '34px')
   const walletMarksLoaded = await page.locator('.wallet-pills img').evaluateAll((images) =>
     images.every((image) => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0),
   )

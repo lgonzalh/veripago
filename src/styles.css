@@ -15,3 +15,6 @@
 .wallet-pills span{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;background:#f2f5f9;border:1px solid #e7ecf3;border-radius:18px;color:#53637a;font-size:9px;font-weight:650;white-space:nowrap}
 .wallet-pills img{width:19px;height:19px;object-fit:contain}
 @media(max-width:680px){.brand-lockup{width:46px;height:46px;flex-basis:46px}.brand-lockup img{width:46px;height:46px}}
+.wallet-pills{display:flex;align-items:center;gap:9px}
+.wallet-pills img{display:block;width:34px;height:34px;object-fit:cover;border:1px solid rgba(28,48,75,.12);border-radius:50%;background:#fff;box-shadow:0 2px 7px rgba(20,43,72,.1)}
+@media(max-width:680px){.wallet-pills{gap:7px}.wallet-pills img{width:30px;height:30px}}

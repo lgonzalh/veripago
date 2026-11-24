@@ -157,13 +157,13 @@ function Landing({ user, onLogin }: { user: UserProfile | null; onLogin: () => v
           <button className="button button-primary" onClick={user ? undefined : onLogin}>
             {user ? <Link className="button-inner-link" to={homeForRole(user.role)}>Ir a mi espacio <ArrowRight size={18} /></Link> : <>Empezar gratis <ArrowRight size={18} /></>}
           </button>
-          {apkRelease.url ? <a className="button button-outline" href={apkRelease.url} download><ArrowDownToLine size={17} /> Descargar APK {apkRelease.version && <small>v{apkRelease.version}</small>}</a> : <button className="button button-outline" onClick={() => setApkMessage('La versión para Android estará disponible pronto.')}><Smartphone size={17} /> App Android alfa</button>}
+          {apkRelease.url ? <a className="button button-outline" href={apkRelease.url} download><ArrowDownToLine size={17} /> Descargar app Android</a> : <button className="button button-outline" onClick={() => setApkMessage('La versión para Android estará disponible pronto.')}><Smartphone size={17} /> App Android</button>}
         </div>
         {apkMessage && <div className="subtle-note">{apkMessage}</div>}
-        <div className="trust-row"><span>Funciona con tus billeteras de siempre</span><div className="wallet-pills" aria-label="Nequi, DaviPlata y Bre-B">
-          <span><img src={nequiLogo} alt="" />Nequi</span>
-          <span><img src={daviplataLogo} alt="" />DaviPlata</span>
-          <span><img src={breBLogo} alt="" />Bre-B</span>
+        <div className="trust-row"><span>Funciona con tus billeteras de siempre</span><div className="wallet-pills" role="group" aria-label="Medios de pago disponibles">
+          <img src={nequiLogo} alt="Nequi" title="Nequi" />
+          <img src={daviplataLogo} alt="DaviPlata" title="DaviPlata" />
+          <img src={breBLogo} alt="Bre-B" title="Bre-B" />
         </div></div>
       </div>
       <div className="hero-art">
