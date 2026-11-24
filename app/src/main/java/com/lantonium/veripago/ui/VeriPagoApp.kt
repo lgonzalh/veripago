@@ -1007,11 +1007,9 @@ private fun MerchantScreen(
         verticalArrangement = Arrangement.spacedBy(if (compactCharge) 4.dp else 8.dp),
     ) {
         if (!compactCharge) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Tu negocio, en orden.", color = Navy, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                    Text("Cobra y verifica cada pedido.", color = Muted, fontSize = 13.sp, maxLines = 1)
-                }
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Tu negocio, en orden.", color = Navy, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text("Cobra y verifica cada pedido.", color = Muted, fontSize = 13.sp, maxLines = 1)
                 Text("${visibleOrders.count { it.paymentStatus.startsWith("VERIFIED") }} verificados · ${visibleOrders.count { it.paymentStatus == "PENDING" }} pendientes", color = Muted, fontSize = 13.sp, maxLines = 1)
             }
         }
@@ -1222,7 +1220,7 @@ private fun MerchantScreen(
                     if (!compactCharge) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.CheckCircle, null, tint = Green, modifier = Modifier.size(13.dp)); Spacer(Modifier.width(5.dp))
-                            Text("Tu dinero llega directo a tu billetera. 0% comisión de VeriPago.", color = Muted, fontSize = 13.sp, maxLines = 1)
+                            Text("Tu dinero llega directo a tu billetera. 0% comisión de VeriPago.", color = Muted, fontSize = 13.sp, lineHeight = 17.sp, maxLines = 2, modifier = Modifier.weight(1f))
                         }
                     }
                 }
@@ -1288,6 +1286,7 @@ private fun MerchantCatalogScreen(
     var savingProduct by remember { mutableStateOf(false) }
     var catalogMessage by remember { mutableStateOf("") }
     var showProducts by remember { mutableStateOf(false) }
+    val productListState = rememberLazyListState()
     var perProductAdjustment by remember(profile.uid) { mutableStateOf(MerchantAdjustment()) }
     var perOrderAdjustment by remember(profile.uid) { mutableStateOf(MerchantAdjustment()) }
     var perProductEnabledDraft by rememberSaveable(profile.uid) { mutableStateOf(false) }
@@ -1317,16 +1316,19 @@ private fun MerchantCatalogScreen(
             }
         }.onFailure { adjustmentMessage = "No se pudieron cargar los ajustes." }
     }
+    LaunchedEffect(showProducts, catalogProducts.size) {
+        if (showProducts && catalogProducts.isNotEmpty()) productListState.scrollToItem(0)
+    }
 
     Column(
         modifier = Modifier.fillMaxSize().background(Color(0xFFF5F7FA)).imePadding()
             .padding(horizontal = 10.dp, vertical = if (compact) 2.dp else 6.dp),
         verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp),
     ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text("Productos", color = Navy, fontSize = if (compact) 18.sp else 20.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                Text(if (catalogLoadError.isNotBlank()) catalogLoadError else if (isDemo) "Modo de prueba · catálogo temporal" else "Catálogo, impuestos y ajustes del negocio", color = if (catalogLoadError.isNotBlank()) Color(0xFFB54743) else Muted, fontSize = 13.sp, maxLines = 1)
+                Text(if (catalogLoadError.isNotBlank()) catalogLoadError else if (isDemo) "Modo de prueba · catálogo temporal" else "Catálogo, impuestos y ajustes del negocio", color = if (catalogLoadError.isNotBlank()) Color(0xFFB54743) else Muted, fontSize = 13.sp, lineHeight = 17.sp, maxLines = 2)
             }
             OutlinedButton(
                 onClick = { showProducts = true },
@@ -1410,7 +1412,7 @@ private fun MerchantCatalogScreen(
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Ajustes del negocio", color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                        Text("Se integran al total; el comprador no ve el detalle.", color = Muted, fontSize = 13.sp, maxLines = 1)
+                        Text("Se integran al total; el comprador no ve el detalle.", color = Muted, fontSize = 13.sp, lineHeight = 17.sp, maxLines = 2)
                     }
                     Button(
                         enabled = !savingAdjustments,
@@ -1460,12 +1462,12 @@ private fun MerchantCatalogScreen(
         title = { Text("Mis productos (${catalogProducts.size})", color = Navy, fontWeight = FontWeight.Bold) },
         text = {
             if (catalogProducts.isEmpty()) Text("Aún no hay productos. Créalo en esta pantalla.", color = Muted, fontSize = 13.sp)
-            else LazyColumn(Modifier.heightIn(max = 380.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            else LazyColumn(state = productListState, modifier = Modifier.heightIn(max = 380.dp), verticalArrangement = Arrangement.spacedBy(7.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp)) {
                 items(catalogProducts, key = { it.id }) { product ->
                     Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F9FC)), shape = RoundedCornerShape(10.dp)) {
                         Column(Modifier.fillMaxWidth().padding(9.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text(product.name, color = Navy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            Text("IVA ${product.vatRate}% · Sin IVA ${formatCop(product.priceWithoutVat)} · Total ${formatCop(product.priceWithVat)}", color = Muted, fontSize = 13.sp)
+                            Text("IVA ${product.vatRate}% · Sin IVA ${formatCop(product.priceWithoutVat)} · Total ${formatCop(product.priceWithVat)}", color = Muted, fontSize = 13.sp, lineHeight = 17.sp, modifier = Modifier.fillMaxWidth())
                             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                                 TextButton(onClick = {
                                     editingProductId = product.id
