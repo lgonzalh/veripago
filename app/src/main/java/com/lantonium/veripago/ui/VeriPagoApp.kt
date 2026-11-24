@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.ImageDecoder
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Rect
 import android.graphics.drawable.AnimatedImageDrawable
 import android.net.Uri
 import android.os.Build
@@ -98,6 +99,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -162,6 +164,26 @@ import kotlin.math.roundToLong
 private val Navy = Color(0xFF0C2442)
 private val Muted = Color(0xFF758398)
 private val Green = Color(0xFF15966A)
+
+@Composable
+private fun rememberKeyboardVisible(): Boolean {
+    val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
+    val view = LocalView.current
+    var windowShowsKeyboard by remember(view) { mutableStateOf(false) }
+    DisposableEffect(view) {
+        val root = view.rootView
+        val visibleFrame = Rect()
+        val listener = android.view.ViewTreeObserver.OnGlobalLayoutListener {
+            root.getWindowVisibleDisplayFrame(visibleFrame)
+            val displayHeight = root.resources.displayMetrics.heightPixels
+            val obscuredHeight = maxOf(displayHeight - visibleFrame.bottom, displayHeight - root.height)
+            windowShowsKeyboard = obscuredHeight > displayHeight * 0.18f
+        }
+        root.viewTreeObserver.addOnGlobalLayoutListener(listener)
+        onDispose { root.viewTreeObserver.removeOnGlobalLayoutListener(listener) }
+    }
+    return imeBottom > 0 || windowShowsKeyboard
+}
 
 private data class AndroidPaymentMethod(
     val provider: String,
@@ -395,7 +417,7 @@ fun VeriPagoApp(activity: Activity) {
     val nav = rememberNavController()
     val navEntry by nav.currentBackStackEntryAsState()
     val currentRoute = navEntry?.destination?.route ?: "inicio"
-    val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val keyboardVisible = rememberKeyboardVisible()
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -672,7 +694,7 @@ private fun FeatureLine(icon: androidx.compose.ui.graphics.vector.ImageVector, l
 @Composable
 private fun ProfileScreen(profile: UserProfile) {
     val isDemo = isDemoMerchant(profile)
-    val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val keyboardVisible = rememberKeyboardVisible()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var whatsappNumber by rememberSaveable(profile.uid) { mutableStateOf("") }
@@ -965,7 +987,7 @@ private fun MerchantScreen(
     fun updateChargeLine(id: String, update: (ChargeDraftLine) -> ChargeDraftLine) {
         chargeLines = chargeLines.map { if (it.id == id) update(it) else it }
     }
-    val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val keyboardVisible = rememberKeyboardVisible()
     var activeChargeLineId by rememberSaveable(profile.uid) { mutableStateOf("") }
     var addProductMenuOpen by remember { mutableStateOf(false) }
     var changeProductMenuOpen by remember { mutableStateOf(false) }
