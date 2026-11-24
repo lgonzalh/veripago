@@ -70,7 +70,7 @@ fun AboutScreen() {
             .windowInsetsPadding(WindowInsets.navigationBars),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("ACERCA DE", color = AboutBlue, fontSize = 10.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.Bold)
+        Text("ACERCA DE", color = AboutBlue, fontSize = 13.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(16.dp))
         Image(
             painter = painterResource(R.drawable.luis),
