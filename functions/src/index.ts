@@ -12,6 +12,12 @@ const allowedPaymentProviders = ['NEQUI', 'DAVIPLATA', 'BRE_B', 'OTHER'] as cons
 
 type PaymentProvider = typeof allowedPaymentProviders[number]
 type PaymentMethod = { provider: PaymentProvider; qrImageUrl: string; paymentKeyLabel: string; beneficiaryName: string }
+type AdjustmentRule = { enabled: boolean; mode: 'FIXED' | 'PERCENT'; value: number }
+type MerchantAdjustments = { perProduct: AdjustmentRule; perOrder: AdjustmentRule }
+const emptyAdjustments: MerchantAdjustments = {
+  perProduct: { enabled: false, mode: 'FIXED', value: 0 },
+  perOrder: { enabled: false, mode: 'FIXED', value: 0 },
+}
 
 function fail(code: ConstructorParameters<typeof HttpsError>[0], message: string): never {
   throw new HttpsError(code, message)
@@ -93,6 +99,35 @@ async function requireRole(uid: string, role: string) {
     fail('permission-denied', 'Tu perfil no tiene permiso para esta acción.')
   }
   return user
+}
+
+function normalizeAdjustmentRule(value: unknown): AdjustmentRule {
+  const data = value && typeof value === 'object' ? value as Record<string, unknown> : {}
+  const mode = data.mode === 'PERCENT' ? 'PERCENT' : 'FIXED'
+  const amount = typeof data.value === 'number' && Number.isFinite(data.value) ? data.value : 0
+  if (mode === 'PERCENT' && (amount < 0 || amount > 100)) fail('invalid-argument', 'El porcentaje debe estar entre 0 y 100.')
+  if (mode === 'FIXED' && (!Number.isSafeInteger(amount) || amount < 0 || amount > 1_000_000_000)) {
+    fail('invalid-argument', 'El valor fijo debe ser COP entero hasta 1.000.000.000.')
+  }
+  return { enabled: data.enabled === true, mode, value: amount }
+}
+
+function normalizeMerchantAdjustments(value: unknown): MerchantAdjustments {
+  const data = value && typeof value === 'object' ? value as Record<string, unknown> : {}
+  return {
+    perProduct: normalizeAdjustmentRule(data.perProduct),
+    perOrder: normalizeAdjustmentRule(data.perOrder),
+  }
+}
+
+async function loadMerchantAdjustments(uid: string): Promise<MerchantAdjustments> {
+  const snapshot = await db.doc(`users/${uid}/settings/fees`).get()
+  return snapshot.exists ? normalizeMerchantAdjustments(snapshot.data()) : emptyAdjustments
+}
+
+function calculateAdjustmentAmount(base: number, rule: AdjustmentRule) {
+  if (!rule.enabled || base <= 0) return 0
+  return rule.mode === 'PERCENT' ? Math.round(base * rule.value / 100) : rule.value
 }
 
 function cleanSlug(value: unknown) {
@@ -191,7 +226,10 @@ export const createPaymentLink = onCall({ region, enforceAppCheck: false }, asyn
   }
   const products = validateProducts((data.schemaJson as Record<string, unknown> | undefined)?.products)
   const paymentMethods = normalizePaymentMethods(data.paymentMethods, data)
-  const contact = await db.doc(`users/${auth.uid}/settings/contact`).get()
+  const [contact, adjustments] = await Promise.all([
+    db.doc(`users/${auth.uid}/settings/contact`).get(),
+    loadMerchantAdjustments(auth.uid),
+  ])
   const merchantWhatsapp = typeof contact.get('whatsappNumber') === 'string' ? contact.get('whatsappNumber') as string : ''
   if (merchantWhatsapp && !/^\+[1-9]\d{7,14}$/.test(merchantWhatsapp)) {
     fail('failed-precondition', 'Actualiza el WhatsApp del comercio en tu perfil antes de crear el enlace.')
@@ -214,6 +252,7 @@ export const createPaymentLink = onCall({ region, enforceAppCheck: false }, asyn
       defaultMode: data.defaultMode,
       schemaJson: { products, captureCustomerInfo: Boolean((data.schemaJson as Record<string, unknown> | undefined)?.captureCustomerInfo) },
       ...paymentMethodFields(paymentMethods),
+      adjustments,
       ...(merchantWhatsapp ? { merchantWhatsapp } : {}),
       reconciliationWindowMinutes: 20,
       isActive: true,
@@ -240,7 +279,10 @@ export const updatePaymentLink = onCall({ region, enforceAppCheck: false }, asyn
     ...current.data(),
     ...data,
   })
-  const contact = await db.doc(`users/${auth.uid}/settings/contact`).get()
+  const [contact, adjustments] = await Promise.all([
+    db.doc(`users/${auth.uid}/settings/contact`).get(),
+    loadMerchantAdjustments(auth.uid),
+  ])
   const merchantWhatsapp = typeof contact.get('whatsappNumber') === 'string' ? contact.get('whatsappNumber') as string : ''
   if (merchantWhatsapp && !/^\+[1-9]\d{7,14}$/.test(merchantWhatsapp)) {
     fail('failed-precondition', 'Actualiza el WhatsApp del comercio en tu perfil antes de actualizar el enlace.')
@@ -253,6 +295,7 @@ export const updatePaymentLink = onCall({ region, enforceAppCheck: false }, asyn
     const patch = {
       schemaJson: { products, captureCustomerInfo: Boolean((data.schemaJson as Record<string, unknown> | undefined)?.captureCustomerInfo) },
       ...paymentMethodFields(paymentMethods),
+      adjustments,
       merchantWhatsapp: merchantWhatsapp || FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp(),
     }
@@ -260,6 +303,25 @@ export const updatePaymentLink = onCall({ region, enforceAppCheck: false }, asyn
     transaction.update(publicRef, patch)
   })
   return { id }
+})
+
+export const saveMerchantAdjustments = onCall({ region, enforceAppCheck: false }, async (request) => {
+  const auth = requireGoogle(request)
+  await requireRole(auth.uid, 'COMERCIANTE')
+  const adjustments = normalizeMerchantAdjustments(request.data)
+  const links = await db.collection('payment_links').where('merchantId', '==', auth.uid).get()
+  const batch = db.batch()
+  batch.set(db.doc(`users/${auth.uid}/settings/fees`), {
+    ...adjustments,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true })
+  links.docs.forEach((link) => {
+    batch.update(link.ref, { adjustments, updatedAt: FieldValue.serverTimestamp() })
+    const slug = cleanSlug(link.get('slug'))
+    if (slug) batch.set(db.doc(`public_payment_links/${slug}`), { adjustments }, { merge: true })
+  })
+  await batch.commit()
+  return { saved: true, updatedLinks: links.size }
 })
 
 export const createCheckoutOrder = onCall({ region, enforceAppCheck: false }, async (request) => {
@@ -270,6 +332,7 @@ export const createCheckoutOrder = onCall({ region, enforceAppCheck: false }, as
   if (!linkSnap.exists || linkSnap.get('isActive') !== true) fail('not-found', 'Este enlace ya no está disponible.')
   const link = linkSnap.data()!
   let selectedMethod = selectPaymentMethod(link, data.paymentProvider)
+  const adjustments = normalizeMerchantAdjustments(link.adjustments)
   const rawItems = data.items
   if (!Array.isArray(rawItems) || rawItems.length < 1 || rawItems.length > 50) fail('invalid-argument', 'El pedido no tiene productos válidos.')
   const catalog = new Map<string, { name: string; unitPrice: number }>(
@@ -283,10 +346,12 @@ export const createCheckoutOrder = onCall({ region, enforceAppCheck: false }, as
     if (!product || !Number.isSafeInteger(qty) || Number(qty) < 0 || Number(qty) > 100) {
       fail('invalid-argument', 'Revisa las cantidades del pedido.')
     }
-    return { name: product.name, qty: Number(qty), unitPrice: product.unitPrice, subtotal: Number(qty) * product.unitPrice }
+    const chargedUnitPrice = product.unitPrice + calculateAdjustmentAmount(product.unitPrice, adjustments.perProduct)
+    return { name: product.name, qty: Number(qty), unitPrice: chargedUnitPrice, subtotal: Number(qty) * chargedUnitPrice }
   }).filter((item) => item.qty > 0)
   if (!items.length) fail('invalid-argument', 'Selecciona al menos un producto.')
-  const totalAmount = items.reduce((sum, item) => sum + item.subtotal, 0)
+  const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0)
+  const totalAmount = subtotal + calculateAdjustmentAmount(subtotal, adjustments.perOrder)
   if (!Number.isSafeInteger(totalAmount) || totalAmount <= 0) fail('invalid-argument', 'El total del pedido no es válido.')
   const channel = allowedChannels.includes(data.checkoutChannel as typeof allowedChannels[number])
     ? data.checkoutChannel as typeof allowedChannels[number]

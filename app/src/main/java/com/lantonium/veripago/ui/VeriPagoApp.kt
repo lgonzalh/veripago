@@ -158,6 +158,38 @@ private data class ChargeDraftLine(
 
 private data class ProductPriceBreakdown(val beforeVat: Long, val vatAmount: Long, val withVat: Long)
 
+private data class MerchantAdjustment(val enabled: Boolean = false, val mode: String = "FIXED", val value: Double = 0.0)
+
+private fun adjustmentAmount(base: Long, adjustment: MerchantAdjustment): Long {
+    if (!adjustment.enabled || base <= 0L) return 0L
+    return if (adjustment.mode == "PERCENT") (base * adjustment.value / 100.0).roundToLong() else adjustment.value.roundToLong()
+}
+
+private fun adjustedUnitPrice(base: Long, adjustment: MerchantAdjustment): Long = base + adjustmentAmount(base, adjustment)
+
+private fun calculateChargeTotal(lines: List<ChargeDraftLine>, perProduct: MerchantAdjustment, perOrder: MerchantAdjustment): Long {
+    val subtotal = lines.sumOf { line ->
+        adjustedUnitPrice(line.unitPriceText.toLongOrNull() ?: 0L, perProduct) * (line.quantityText.toIntOrNull()?.coerceIn(1, 100) ?: 1)
+    }
+    return subtotal + adjustmentAmount(subtotal, perOrder)
+}
+
+private fun adjustmentFromMap(value: Any?): MerchantAdjustment {
+    val data = value as? Map<*, *> ?: return MerchantAdjustment()
+    val mode = (data["mode"] as? String)?.takeIf { it == "FIXED" || it == "PERCENT" } ?: "FIXED"
+    val amount = (data["value"] as? Number)?.toDouble()?.coerceAtLeast(0.0) ?: 0.0
+    return MerchantAdjustment(data["enabled"] as? Boolean ?: false, mode, amount)
+}
+
+private fun parseAdjustmentDraft(enabled: Boolean, mode: String, raw: String): MerchantAdjustment {
+    if (mode != "FIXED" && mode != "PERCENT") error("Elige valor fijo o porcentaje.")
+    val value = raw.trim().replace(',', '.').toDoubleOrNull() ?: if (raw.isBlank()) 0.0 else error("Escribe un valor válido.")
+    if (enabled && value <= 0.0) error("Escribe un valor mayor que cero o desactiva este ajuste.")
+    if (mode == "PERCENT" && value > 100.0) error("El porcentaje no puede superar 100%.")
+    if (mode == "FIXED" && (value % 1.0 != 0.0 || value > 1_000_000_000.0)) error("El valor fijo debe ser COP entero, hasta 1.000.000.000.")
+    return MerchantAdjustment(enabled, mode, value)
+}
+
 private fun parseVatRate(raw: String): Double? {
     if (raw.isBlank()) return 0.0
     return raw.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it in 0.0..100.0 }
@@ -664,6 +696,37 @@ private fun ProfileScreen(profile: UserProfile) {
 }
 
 @Composable
+private fun AdjustmentEditor(
+    title: String,
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+    mode: String,
+    onModeChange: (String) -> Unit,
+    value: String,
+    onValueChange: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = enabled, onCheckedChange = onEnabledChange)
+            Text(title, color = Navy, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            TextButton(onClick = { onModeChange("FIXED") }) { Text(if (mode == "FIXED") "✓ Valor fijo" else "Valor fijo", fontSize = 9.sp) }
+            TextButton(onClick = { onModeChange("PERCENT") }) { Text(if (mode == "PERCENT") "✓ Porcentaje" else "Porcentaje", fontSize = 9.sp) }
+        }
+        OutlinedTextField(
+            value = value,
+            onValueChange = { input -> onValueChange(input.filter { it.isDigit() || (mode == "PERCENT" && (it == '.' || it == ',')) }.take(12)) },
+            label = { Text(if (mode == "FIXED") "Valor en COP" else "Porcentaje") },
+            keyboardOptions = KeyboardOptions(keyboardType = if (mode == "FIXED") KeyboardType.Number else KeyboardType.Decimal),
+            singleLine = true,
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
 private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, onDemoOrdersChange: (List<OrderEntity>) -> Unit, onError: (String) -> Unit) {
     val isDemo = isDemoMerchant(profile)
     var chargeLines by remember(profile.uid) { mutableStateOf(listOf(ChargeDraftLine())) }
@@ -691,9 +754,17 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
     val context = LocalContext.current
     val productRepository = remember { MerchantProductRepository() }
     val installedWalletApps = remember(profile.uid) { detectInstalledWalletApps(context) }
-    val amount = chargeLines.sumOf { line ->
-        (line.unitPriceText.toLongOrNull() ?: 0L) * (line.quantityText.toIntOrNull()?.coerceIn(1, 100) ?: 1)
-    }
+    var perProductAdjustment by remember(profile.uid) { mutableStateOf(MerchantAdjustment()) }
+    var perOrderAdjustment by remember(profile.uid) { mutableStateOf(MerchantAdjustment()) }
+    var perProductEnabledDraft by rememberSaveable(profile.uid) { mutableStateOf(false) }
+    var perProductModeDraft by rememberSaveable(profile.uid) { mutableStateOf("FIXED") }
+    var perProductValueDraft by rememberSaveable(profile.uid) { mutableStateOf("") }
+    var perOrderEnabledDraft by rememberSaveable(profile.uid) { mutableStateOf(false) }
+    var perOrderModeDraft by rememberSaveable(profile.uid) { mutableStateOf("FIXED") }
+    var perOrderValueDraft by rememberSaveable(profile.uid) { mutableStateOf("") }
+    var savingAdjustments by remember { mutableStateOf(false) }
+    var adjustmentMessage by remember { mutableStateOf("") }
+    val amount = calculateChargeTotal(chargeLines, perProductAdjustment, perOrderAdjustment)
     val chargeIsValid = chargeLines.isNotEmpty() && chargeLines.size <= 50 && chargeLines.all { line ->
         line.name.isNotBlank() && (line.unitPriceText.toLongOrNull() ?: 0L) > 0L && (line.quantityText.toIntOrNull() ?: 0) in 1..100
     }
@@ -730,6 +801,13 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
         runCatching {
             val firestore = FirebaseClients.firestore ?: return@runCatching
             catalogProducts = productRepository.load(profile.uid)
+            val adjustments = firestore.collection("users").document(profile.uid).collection("settings").document("fees").get().await()
+            perProductAdjustment = adjustmentFromMap(adjustments.get("perProduct"))
+            perOrderAdjustment = adjustmentFromMap(adjustments.get("perOrder"))
+            perProductEnabledDraft = perProductAdjustment.enabled; perProductModeDraft = perProductAdjustment.mode
+            perProductValueDraft = if (perProductAdjustment.value == 0.0) "" else perProductAdjustment.value.toString()
+            perOrderEnabledDraft = perOrderAdjustment.enabled; perOrderModeDraft = perOrderAdjustment.mode
+            perOrderValueDraft = if (perOrderAdjustment.value == 0.0) "" else perOrderAdjustment.value.toString()
             merchantWhatsapp = firestore.collection("users").document(profile.uid)
                 .collection("settings").document("contact").get().await().getString("whatsappNumber").orEmpty()
             val link = firestore.collection("payment_links").whereEqualTo("merchantId", profile.uid)
@@ -798,7 +876,7 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
                                 OutlinedTextField(line.unitPriceText, { value -> updateChargeLine(line.id) { it.copy(unitPriceText = value.filter(Char::isDigit).take(10), catalogProductId = null) } }, label = { Text("Precio unitario (COP)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.weight(1f))
                                 OutlinedTextField(line.quantityText, { value -> updateChargeLine(line.id) { it.copy(quantityText = value.filter(Char::isDigit).take(3)) } }, label = { Text("Cantidad") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.width(100.dp))
                             }
-                            val lineTotal = (line.unitPriceText.toLongOrNull() ?: 0L) * (line.quantityText.toIntOrNull()?.coerceIn(1, 100) ?: 1)
+                            val lineTotal = adjustedUnitPrice(line.unitPriceText.toLongOrNull() ?: 0L, perProductAdjustment) * (line.quantityText.toIntOrNull()?.coerceIn(1, 100) ?: 1)
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("Subtotal del producto", color = Muted, fontSize = 9.sp)
                                 Text(formatCop(lineTotal), color = Navy, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
@@ -878,7 +956,7 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
                                                 customerUid = null,
                                                 customerName = "Pedido de demostración",
                                                 customerPhone = "",
-                                                itemsJson = serializeChargeItems(chargeLines),
+                                                itemsJson = serializeChargeItems(chargeLines, perProductAdjustment),
                                                 totalAmount = amount,
                                                 checkoutChannel = "DEMO",
                                                 paymentStatus = "PENDING",
@@ -1013,6 +1091,59 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Text("Ajustes del negocio", color = Navy, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text("Se suman al total automáticamente. El comprador no verá una línea separada.", color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
+                    Text("El adicional por producto se multiplica por la cantidad; el adicional por pedido se aplica una sola vez al subtotal.", color = Muted, fontSize = 9.sp, lineHeight = 14.sp)
+                    AdjustmentEditor(
+                        title = "Adicional por producto",
+                        enabled = perProductEnabledDraft,
+                        onEnabledChange = { perProductEnabledDraft = it },
+                        mode = perProductModeDraft,
+                        onModeChange = { perProductModeDraft = it },
+                        value = perProductValueDraft,
+                        onValueChange = { perProductValueDraft = it },
+                    )
+                    AdjustmentEditor(
+                        title = "Adicional por pedido",
+                        enabled = perOrderEnabledDraft,
+                        onEnabledChange = { perOrderEnabledDraft = it },
+                        mode = perOrderModeDraft,
+                        onModeChange = { perOrderModeDraft = it },
+                        value = perOrderValueDraft,
+                        onValueChange = { perOrderValueDraft = it },
+                    )
+                    Button(
+                        enabled = !savingAdjustments,
+                        onClick = {
+                            scope.launch {
+                                savingAdjustments = true; adjustmentMessage = ""
+                                runCatching {
+                                    val productRule = parseAdjustmentDraft(perProductEnabledDraft, perProductModeDraft, perProductValueDraft)
+                                    val orderRule = parseAdjustmentDraft(perOrderEnabledDraft, perOrderModeDraft, perOrderValueDraft)
+                                    if (!isDemo) {
+                                        val functions = FirebaseClients.functions ?: error("Cloud Functions no está disponible.")
+                                        functions.getHttpsCallable("saveMerchantAdjustments").call(mapOf(
+                                            "perProduct" to mapOf("enabled" to productRule.enabled, "mode" to productRule.mode, "value" to productRule.value),
+                                            "perOrder" to mapOf("enabled" to orderRule.enabled, "mode" to orderRule.mode, "value" to orderRule.value),
+                                        )).await()
+                                    }
+                                    perProductAdjustment = productRule; perOrderAdjustment = orderRule
+                                }.onSuccess {
+                                    adjustmentMessage = "Ajustes guardados para este comercio."
+                                }.onFailure { adjustmentMessage = it.localizedMessage ?: "No se pudieron guardar los ajustes." }
+                                savingAdjustments = false
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(if (savingAdjustments) "Guardando…" else "Guardar ajustes") }
+                    if (adjustmentMessage.isNotBlank()) Text(adjustmentMessage, color = if (adjustmentMessage.startsWith("No se pudieron")) Color(0xFFB54743) else Green, fontSize = 9.sp)
+                    if (isDemo) Text("Modo de prueba: estos valores solo duran durante la sesión.", color = Color(0xFFB54743), fontSize = 9.sp)
+                }
+            }
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
                 Column(Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.NotificationsActive, null, tint = Green); Spacer(Modifier.width(8.dp)); Text("Pagos recibidos", color = Navy, fontWeight = FontWeight.Bold, fontSize = 14.sp) }
                     Spacer(Modifier.height(6.dp))
@@ -1137,10 +1268,10 @@ private suspend fun createShareLink(profile: UserProfile, lines: List<ChargeDraf
         "https://veripago-9cda6.web.app/VeriPago/${result["slug"]}"
 }
 
-private fun serializeChargeItems(lines: List<ChargeDraftLine>): String = lines.joinToString(prefix = "[", postfix = "]") { line ->
+private fun serializeChargeItems(lines: List<ChargeDraftLine>, perProduct: MerchantAdjustment): String = lines.joinToString(prefix = "[", postfix = "]") { line ->
     val safeName = line.name.trim().replace("\\", "\\\\").replace("\"", "\\\"")
     val quantity = line.quantityText.toIntOrNull()?.coerceIn(1, 100) ?: 1
-    val unitPrice = line.unitPriceText.toLongOrNull() ?: 0L
+    val unitPrice = adjustedUnitPrice(line.unitPriceText.toLongOrNull() ?: 0L, perProduct)
     "{\"name\":\"$safeName\",\"qty\":$quantity,\"unitPrice\":$unitPrice,\"subtotal\":${unitPrice * quantity}}"
 }
 

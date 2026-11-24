@@ -29,6 +29,17 @@ export interface Product {
   defaultQty?: number
 }
 
+export interface PriceAdjustment {
+  enabled: boolean
+  mode: 'FIXED' | 'PERCENT'
+  value: number
+}
+
+export interface MerchantAdjustments {
+  perProduct: PriceAdjustment
+  perOrder: PriceAdjustment
+}
+
 export interface PaymentLink {
   id: string
   merchantId: string
@@ -42,6 +53,7 @@ export interface PaymentLink {
   paymentProvider?: PaymentProvider
   paymentMethods?: PaymentMethod[]
   merchantWhatsapp?: string
+  adjustments?: MerchantAdjustments
   isActive: boolean
 }
 

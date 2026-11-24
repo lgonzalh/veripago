@@ -23,7 +23,7 @@ import {
 } from './lib/data'
 import { calculateOrderTotal, formatCOP, slugify } from './lib/money'
 import { parseNotification } from './lib/bankParser'
-import type { OrderRecord, PaymentLink, PaymentMethod, PaymentProvider, Product, Role, UserProfile } from './lib/types'
+import type { OrderRecord, PaymentLink, PaymentMethod, PaymentProvider, PriceAdjustment, Product, Role, UserProfile } from './lib/types'
 
 const roleNames: Record<Role, string> = {
   COMERCIANTE: 'Comerciante', ADMINISTRADOR: 'Administrador',
@@ -195,6 +195,11 @@ function Landing({ onLogin }: { onLogin: () => void }) {
 
 function GoogleMark() { return <img src={googleLogo} alt="" aria-hidden="true" className="google-logo" /> }
 
+function adjustmentAmount(base: number, adjustment?: PriceAdjustment) {
+  if (!adjustment?.enabled || base <= 0) return 0
+  return adjustment.mode === 'PERCENT' ? Math.round(base * adjustment.value / 100) : adjustment.value
+}
+
 function AccessGate({ user, openLogin }: { user: UserProfile | null; openLogin: () => void }) {
   return <main className="access-gate"><div className="access-card"><span className="access-icon"><ShieldCheck /></span><h2>Este espacio es para usuarios registrados</h2><p>{user ? `Tu perfil actual es ${roleNames[user.role]}.` : 'Inicia sesión para continuar con tu cuenta VeriPago.'}</p>{user ? <Link className="button button-primary" to={homeForRole(user.role)}>Ir a mi espacio</Link> : <button className="button button-primary" onClick={openLogin}><GoogleMark /> Continuar con Google <ArrowRight size={16} /></button>}</div></main>
 }
@@ -217,7 +222,10 @@ function PublicCheckout() {
   const items = link?.schemaJson.products ?? []
   const paymentMethods = link ? paymentMethodsForLink(link) : []
   const selectedPaymentMethod = paymentMethods.find((method) => method.provider === paymentProvider) ?? paymentMethods[0]
-  const total = calculateOrderTotal(items.map((item) => ({ unitPrice: item.unitPrice, qty: quantities[item.id] ?? item.defaultQty ?? 1 })))
+  const chargedItems = items.map((item) => ({ ...item, unitPrice: item.unitPrice + adjustmentAmount(item.unitPrice, link?.adjustments?.perProduct) }))
+  const subtotal = calculateOrderTotal(chargedItems.map((item) => ({ unitPrice: item.unitPrice, qty: quantities[item.id] ?? item.defaultQty ?? 1 })))
+  const orderAdjustment = adjustmentAmount(subtotal, link?.adjustments?.perOrder)
+  const total = subtotal + orderAdjustment
   const submit = async () => {
     if (!link) return
     if (!name.trim() || phone.replace(/\D/g, '').length < 7) { setError('Ingresa tu nombre y un teléfono válido para continuar.'); return }
@@ -235,7 +243,7 @@ function PublicCheckout() {
     <div className="checkout-card"><div className="checkout-head"><span className="checkout-icon"><Store size={20} /></span><span><small>ESTÁS PAGANDO A</small><b>{link.beneficiaryName || link.title}</b></span><ShieldCheck className="secure-icon" size={18} /></div>
       {paid ? <div className="paid-state"><span className="paid-check"><Check size={36} /></span><div className="eyebrow">PAGO CONFIRMADO</div><h1>¡Pago verificado!</h1><p>El comercio ya recibió la confirmación de tu transferencia.</p><div className="receipt-row"><span>Pedido</span><b>{orderCode}</b></div><div className="receipt-row"><span>Total</span><b>{formatCOP(total)}</b></div><div className="verified-foot"><BadgeCheck size={16} /> Comprobante digital VeriPago</div></div> : <>
         <div className="checkout-title"><div className="eyebrow">{sessionId ? 'ESPERANDO CONFIRMACIÓN' : 'COMPLETA TU PEDIDO'}</div><h1>{sessionId ? 'Paga y vuelve aquí' : link.title}</h1><p>{sessionId ? 'Transfiere el valor exacto con el QR. La confirmación aparecerá aquí automáticamente.' : 'Revisa tu pedido, transfiere directo al comercio y sigue el estado en tiempo real.'}</p></div>
-        {!sessionId && <><div className="checkout-products">{items.length ? items.map((item) => <div className="checkout-product" key={item.id}><div><b>{item.name}</b><small>{formatCOP(item.unitPrice)} c/u</small></div><div className="qty-picker"><button onClick={() => setQuantities((q) => ({ ...q, [item.id]: Math.max(0, (q[item.id] ?? item.defaultQty ?? 1) - 1) }))}>−</button><span>{Math.min(100, quantities[item.id] ?? item.defaultQty ?? 1)}</span><button onClick={() => setQuantities((q) => ({ ...q, [item.id]: Math.min(100, (q[item.id] ?? item.defaultQty ?? 1) + 1) }))}>+</button></div></div>) : <div className="checkout-product"><b>Pedido</b><span>Contacta al comercio para conocer el detalle.</span></div>}</div>
+        {!sessionId && <><div className="checkout-products">{chargedItems.length ? chargedItems.map((item) => <div className="checkout-product" key={item.id}><div><b>{item.name}</b><small>{formatCOP(item.unitPrice)} c/u</small></div><div className="qty-picker"><button onClick={() => setQuantities((q) => ({ ...q, [item.id]: Math.max(0, (q[item.id] ?? item.defaultQty ?? 1) - 1) }))}>−</button><span>{Math.min(100, quantities[item.id] ?? item.defaultQty ?? 1)}</span><button onClick={() => setQuantities((q) => ({ ...q, [item.id]: Math.min(100, (q[item.id] ?? item.defaultQty ?? 1) + 1) }))}>+</button></div></div>) : <div className="checkout-product"><b>Pedido</b><span>Contacta al comercio para conocer el detalle.</span></div>}</div>
           <label className="field-label">Tu nombre<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre y apellido" autoComplete="name" /></label><label className="field-label">WhatsApp o teléfono<input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="300 000 0000" inputMode="tel" autoComplete="tel" /></label>
         </>}
         <div className="checkout-total"><span>Total a transferir</span><strong>{formatCOP(total)}</strong></div>
