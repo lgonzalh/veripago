@@ -184,7 +184,14 @@ class FirestoreSyncManager(private val database: VeriPagoDatabase) {
             if (slug.isBlank()) error("No se pudo sincronizar un enlace de cobro del negocio.")
             val updatedAt = FieldValue.serverTimestamp()
             batch.update(link.reference, mapOf("adjustments" to adjustments, "updatedAt" to updatedAt))
-            batch.update(firestore.collection("public_payment_links").document(slug), mapOf("adjustments" to adjustments, "updatedAt" to updatedAt))
+            // Keep the public checkout as a full mirror and repair legacy missing documents.
+            // Firestore rules allow create only when getAfter() proves this exact private link.
+            val publicMirror = link.data.orEmpty() + mapOf(
+                "adjustments" to adjustments,
+                "updatedAt" to updatedAt,
+                "linkId" to link.id,
+            )
+            batch.set(firestore.collection("public_payment_links").document(slug), publicMirror)
         }
         batch.commit().await()
     }

@@ -210,7 +210,7 @@ describe('Firestore security rules', () => {
       const link = { merchantId: 'merchant-fees-1', slug: 'fees-link', title: 'Pedido', adjustments: { perProduct: { enabled: false, mode: 'FIXED', value: 0 }, perOrder: { enabled: false, mode: 'FIXED', value: 0 } } }
       const otherLink = { ...link, merchantId: 'merchant-fees-2', slug: 'other-fees-link' }
       await setDoc(doc(db, 'payment_links', 'fees-link'), link)
-      await setDoc(doc(db, 'public_payment_links', 'fees-link'), { ...link, linkId: 'fees-link', isActive: true })
+      // Simulate the historic NOT_FOUND case: the owner's private link exists, its public mirror does not.
       await setDoc(doc(db, 'payment_links', 'other-fees-link'), otherLink)
       await setDoc(doc(db, 'public_payment_links', 'other-fees-link'), { ...otherLink, linkId: 'other-fees-link', isActive: true })
     })
@@ -221,9 +221,19 @@ describe('Firestore security rules', () => {
       perOrder: { enabled: true, mode: 'FIXED', value: 500 },
     }
     const feeSettings = doc(merchant, 'users', 'merchant-fees-1', 'settings', 'fees')
-    await assertSucceeds(setDoc(feeSettings, { ...adjustments, updatedAt: serverTimestamp() }))
+    const feeBatch = writeBatch(merchant)
+    feeBatch.set(feeSettings, { ...adjustments, updatedAt: serverTimestamp() })
+    feeBatch.update(doc(merchant, 'payment_links', 'fees-link'), { adjustments, updatedAt: serverTimestamp() })
+    feeBatch.set(doc(merchant, 'public_payment_links', 'fees-link'), {
+      merchantId: 'merchant-fees-1',
+      slug: 'fees-link',
+      title: 'Pedido',
+      adjustments,
+      updatedAt: serverTimestamp(),
+      linkId: 'fees-link',
+    })
+    await assertSucceeds(feeBatch.commit())
     await assertFails(setDoc(doc(merchant, 'users', 'merchant-fees-2', 'settings', 'fees'), { ...adjustments, updatedAt: serverTimestamp() }))
-    await assertSucceeds(updateDoc(doc(merchant, 'payment_links', 'fees-link'), { adjustments, updatedAt: serverTimestamp() }))
     await assertSucceeds(updateDoc(doc(merchant, 'public_payment_links', 'fees-link'), { adjustments, updatedAt: serverTimestamp() }))
     await assertFails(updateDoc(doc(merchant, 'payment_links', 'other-fees-link'), { adjustments, updatedAt: serverTimestamp() }))
     await assertFails(updateDoc(doc(merchant, 'public_payment_links', 'fees-link'), { adjustments, title: 'Cambio no autorizado', updatedAt: serverTimestamp() }))
