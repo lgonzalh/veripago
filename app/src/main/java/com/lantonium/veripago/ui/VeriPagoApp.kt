@@ -107,6 +107,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.lantonium.veripago.ui.components.AppButton
+import com.lantonium.veripago.ui.components.AppCard
+import com.lantonium.veripago.ui.components.AppOutlinedButton
+import com.lantonium.veripago.ui.components.AppSegmentedSelector
+import com.lantonium.veripago.ui.components.AppTextField
+import com.lantonium.veripago.ui.components.SegmentOption
+import com.lantonium.veripago.ui.theme.DesignTokens
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.CustomCredential
@@ -751,7 +758,7 @@ private fun ProfileScreen(profile: UserProfile) {
     ) {
         if (!keyboardVisible) {
             if (isDemo) DemoNotice()
-            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
+            AppCard {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (profile.photoUrl.isNotBlank()) {
                         AsyncImage(profile.photoUrl, contentDescription = "Foto de ${profile.displayName}", modifier = Modifier.size(46.dp).clip(CircleShape), contentScale = ContentScale.Crop)
@@ -770,24 +777,23 @@ private fun ProfileScreen(profile: UserProfile) {
             }
         }
         if (profile.role == "COMERCIANTE") {
-            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+            AppCard {
                 Column(Modifier.fillMaxWidth().padding(if (keyboardVisible) 8.dp else 10.dp), verticalArrangement = Arrangement.spacedBy(if (keyboardVisible) 4.dp else 6.dp)) {
                     Text("WhatsApp del comercio", color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     if (isDemo) {
                         Text("En la prueba no se guarda ni se publica ningún número.", color = Color(0xFFB54743), fontSize = 13.sp)
                     } else {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            OutlinedTextField(
+                            AppTextField(
                                 value = whatsappDraft,
                                 onValueChange = { whatsappDraft = it.take(20); contactMessage = "" },
-                                label = { Text("Número del comerciante") },
-                                placeholder = { Text("300 000 00 00") },
+                                label = "Número del comerciante",
+                                placeholder = "300 000 00 00",
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                                singleLine = true,
                                 enabled = !loadingContact && !savingContact,
-                                modifier = Modifier.weight(1f).height(56.dp),
+                                modifier = Modifier.weight(1f),
                             )
-                            Button(
+                            AppButton(
                                 enabled = !loadingContact && !savingContact && whatsappDraft != whatsappNumber,
                                 onClick = {
                                     val normalized = normalizeWhatsappNumber(whatsappDraft)
@@ -807,14 +813,14 @@ private fun ProfileScreen(profile: UserProfile) {
                                         savingContact = false
                                     }
                                 },
-                                modifier = Modifier.height(52.dp),
+                                modifier = Modifier,
                             ) { Text(if (loadingContact) "…" else if (savingContact) "…" else "Guardar", fontSize = 13.sp) }
                         }
                         if (contactMessage.isNotBlank()) Text(contactMessage, color = if (contactMessage.startsWith("No se pudo") || contactMessage.startsWith("Ingresa")) Color(0xFFB54743) else Green, fontSize = 13.sp, maxLines = 1)
                     }
                 }
             }
-            if (!keyboardVisible) Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+            if (!keyboardVisible) AppCard {
                 Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Códigos QR", color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
@@ -837,12 +843,11 @@ private fun ProfileScreen(profile: UserProfile) {
                                     } else Icon(Icons.Default.QrCode2, contentDescription = null, tint = Color(0xFF9AAAC0), modifier = Modifier.size(36.dp))
                                     if (uploadingQrProvider == provider) CircularProgressIndicator(Modifier.align(Alignment.Center).size(24.dp), strokeWidth = 2.dp)
                                 }
-                                OutlinedButton(
+                                AppOutlinedButton(
                                     enabled = !isDemo && uploadingQrProvider.isBlank(),
                                     onClick = { pendingQrProvider = provider; qrPicker.launch(arrayOf("image/png", "image/jpeg", "image/webp")) },
-                                    modifier = Modifier.fillMaxWidth().height(32.dp),
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
-                                ) { Text(if (method == null) "Cargar" else "Cambiar", fontSize = 13.sp, maxLines = 1) }
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) { Text(if (method == null) "Cargar" else "Cambiar", fontSize = DesignTokens.contentText, maxLines = 1) }
                             }
                         }
                     }
@@ -887,23 +892,18 @@ private fun AdjustmentEditor(
             Spacer(Modifier.width(3.dp))
             Text(title, color = Navy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            TextButton(onClick = { onModeChange("FIXED") }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp, vertical = 0.dp)) {
-                Text(if (mode == "FIXED") "✓ \$" else "\$", fontSize = 13.sp, maxLines = 1)
-            }
-            TextButton(onClick = { onModeChange("PERCENT") }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp, vertical = 0.dp)) {
-                Text(if (mode == "PERCENT") "✓ %" else "%", fontSize = 13.sp, maxLines = 1)
-            }
-        }
-        OutlinedTextField(
+        AppSegmentedSelector(
+            options = listOf(SegmentOption("FIXED", "\$"), SegmentOption("PERCENT", "%")),
+            selected = mode,
+            onSelected = onModeChange,
+        )
+        AppTextField(
             value = value,
             onValueChange = { input -> onValueChange(input.filter { it.isDigit() || (mode == "PERCENT" && (it == '.' || it == ',')) }.take(12)) },
-            placeholder = { Text(if (mode == "FIXED") "Valor \$" else "Porcentaje") },
-            textStyle = androidx.compose.ui.text.TextStyle(color = Navy, fontSize = 13.sp),
+            placeholder = if (mode == "FIXED") "Valor \$" else "Porcentaje",
             keyboardOptions = KeyboardOptions(keyboardType = if (mode == "FIXED") KeyboardType.Number else KeyboardType.Decimal),
-            singleLine = true,
             enabled = enabled,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp, max = 54.dp).then(rememberKeepFocusedFieldVisible()),
+            modifier = Modifier.fillMaxWidth().then(rememberKeepFocusedFieldVisible()),
         )
     }
 }
@@ -1009,14 +1009,12 @@ private fun MerchantScreen(
         if (!compactCharge) {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("Tu negocio, en orden.", color = Navy, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                Text("Cobra y verifica cada pedido.", color = Muted, fontSize = 13.sp, maxLines = 1)
-                Text("${visibleOrders.count { it.paymentStatus.startsWith("VERIFIED") }} verificados · ${visibleOrders.count { it.paymentStatus == "PENDING" }} pendientes", color = Muted, fontSize = 13.sp, maxLines = 1)
+                Text("Cobra y verifica cada pedido.", color = Muted, fontSize = DesignTokens.contentText, maxLines = 1)
+                Text("${visibleOrders.count { it.paymentStatus.startsWith("VERIFIED") }} verificados · ${visibleOrders.count { it.paymentStatus == "PENDING" }} pendientes", color = Muted, fontSize = DesignTokens.contentText, maxLines = 1)
             }
         }
-        Card(
+        AppCard(
             modifier = Modifier.fillMaxWidth().weight(1f),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            shape = RoundedCornerShape(16.dp),
         ) {
             Column(
                 modifier = Modifier.fillMaxWidth().padding(if (compactCharge) 9.dp else 12.dp),
@@ -1046,14 +1044,10 @@ private fun MerchantScreen(
                         ) {
                             chosenLines.forEachIndexed { index, line ->
                                 val selected = line.id == activeLine?.id
-                                OutlinedButton(
-                                    onClick = { activeChargeLineId = line.id },
-                                    modifier = Modifier.height(34.dp),
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 9.dp, vertical = 0.dp),
-                                    shape = RoundedCornerShape(18.dp),
-                                    colors = if (selected) ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFFEAF2FF)) else ButtonDefaults.outlinedButtonColors(),
-                                ) {
-                                    Text("${index + 1}. ${line.name} ×${line.quantityText}", fontSize = 13.sp, maxLines = 1)
+                                if (selected) AppButton(onClick = { activeChargeLineId = line.id }) {
+                                    Text("${index + 1}. ${line.name} ×${line.quantityText}", fontSize = DesignTokens.contentText, maxLines = 1)
+                                } else AppOutlinedButton(onClick = { activeChargeLineId = line.id }) {
+                                    Text("${index + 1}. ${line.name} ×${line.quantityText}", fontSize = DesignTokens.contentText, maxLines = 1)
                                 }
                             }
                         }
@@ -1061,10 +1055,9 @@ private fun MerchantScreen(
                     activeLine?.let { line ->
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Box(Modifier.weight(1f)) {
-                                OutlinedButton(
+                                AppOutlinedButton(
                                     onClick = { changeProductMenuOpen = true },
-                                    modifier = Modifier.fillMaxWidth().height(42.dp),
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 9.dp, vertical = 0.dp),
+                                    modifier = Modifier.fillMaxWidth(),
                                 ) { Text(line.name.ifBlank { "Seleccionar producto" }, maxLines = 1, fontSize = 13.sp) }
                                 DropdownMenu(expanded = changeProductMenuOpen, onDismissRequest = { changeProductMenuOpen = false }) {
                                     catalogProducts.forEach { product ->
@@ -1078,14 +1071,12 @@ private fun MerchantScreen(
                                     }
                                 }
                             }
-                            OutlinedTextField(
+                            AppTextField(
                                 value = line.quantityText,
                                 onValueChange = { value -> updateChargeLine(line.id) { it.copy(quantityText = value.filter(Char::isDigit).take(3)) } },
-                                label = { Text("Cantidad", fontSize = 13.sp) },
+                                label = "Cantidad",
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                singleLine = true,
-                                textStyle = androidx.compose.ui.text.TextStyle(color = Navy, fontSize = 13.sp),
-                                modifier = Modifier.width(100.dp).height(54.dp),
+                                modifier = Modifier.width(100.dp),
                             )
                             if (chargeLines.size > 1) IconButton(onClick = { chargeLines = chargeLines.filterNot { it.id == line.id } }, modifier = Modifier.size(34.dp)) {
                                 Text("×", color = Muted, fontSize = 21.sp)
@@ -1143,18 +1134,16 @@ private fun MerchantScreen(
                     if (configuredPaymentMethods.isEmpty() && !compactCharge) {
                         Text("Configura tus códigos QR desde Perfil.", color = Muted, fontSize = 13.sp, maxLines = 1)
                     }
-                    OutlinedTextField(
+                    AppTextField(
                         value = customerWhatsapp,
                         onValueChange = { customerWhatsapp = it.take(20) },
-                        label = { Text("WhatsApp del cliente", fontSize = 13.sp) },
-                        placeholder = { Text("300 0 00 00 00") },
+                        label = "WhatsApp del cliente",
+                        placeholder = "300 000 00 00",
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                        singleLine = true,
-                        textStyle = androidx.compose.ui.text.TextStyle(color = Navy, fontSize = 13.sp),
-                        modifier = Modifier.fillMaxWidth().height(55.dp),
+                        modifier = Modifier.fillMaxWidth(),
                     )
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        Button(
+                        AppButton(
                             enabled = !busy && chargeIsValid && selectedPaymentMethod != null,
                             onClick = {
                                 scope.launch {
@@ -1179,14 +1168,12 @@ private fun MerchantScreen(
                                     finally { busy = false }
                                 }
                             },
-                            modifier = Modifier.weight(1f).height(43.dp),
-                            shape = RoundedCornerShape(10.dp),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp),
+                            modifier = Modifier.weight(1f),
                         ) {
                             if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
                             else { Icon(Icons.Default.QrCode2, null, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(4.dp)); Text("Mostrar QR", fontSize = 13.sp, maxLines = 1) }
                         }
-                        OutlinedButton(
+                        AppOutlinedButton(
                             enabled = !busy && chargeIsValid,
                             onClick = {
                                 scope.launch {
@@ -1212,15 +1199,13 @@ private fun MerchantScreen(
                                     finally { busy = false }
                                 }
                             },
-                            modifier = Modifier.weight(1f).height(43.dp),
-                            shape = RoundedCornerShape(10.dp),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp),
+                            modifier = Modifier.weight(1f),
                         ) { Icon(Icons.Default.Link, null, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(4.dp)); Text("WhatsApp", fontSize = 13.sp, maxLines = 1) }
                     }
                     if (!compactCharge) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.CheckCircle, null, tint = Green, modifier = Modifier.size(13.dp)); Spacer(Modifier.width(5.dp))
-                            Text("Tu dinero llega directo a tu billetera. 0% comisión de VeriPago.", color = Muted, fontSize = 13.sp, lineHeight = 17.sp, maxLines = 2, modifier = Modifier.weight(1f))
+                            Text("Directo a tu billetera · 0% comisión", color = Muted, fontSize = DesignTokens.contentText, lineHeight = 17.sp, maxLines = 2, modifier = Modifier.weight(1f))
                         }
                     }
                 }
@@ -1328,25 +1313,24 @@ private fun MerchantCatalogScreen(
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text("Productos", color = Navy, fontSize = if (compact) 18.sp else 20.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                Text(if (catalogLoadError.isNotBlank()) catalogLoadError else if (isDemo) "Modo de prueba · catálogo temporal" else "Catálogo, impuestos y ajustes del negocio", color = if (catalogLoadError.isNotBlank()) Color(0xFFB54743) else Muted, fontSize = 13.sp, lineHeight = 17.sp, maxLines = 2)
+                Text(if (catalogLoadError.isNotBlank()) catalogLoadError else if (isDemo) "Modo de prueba · catálogo temporal" else "Gestión de catálogo e impuestos", color = if (catalogLoadError.isNotBlank()) Color(0xFFB54743) else Muted, fontSize = DesignTokens.contentText, lineHeight = 17.sp, maxLines = 2)
             }
-            OutlinedButton(
+            AppOutlinedButton(
                 onClick = { showProducts = true },
-                modifier = Modifier.height(36.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 9.dp, vertical = 0.dp),
+                modifier = Modifier.heightIn(min = DesignTokens.controlHeight),
             ) {
                 Icon(Icons.Default.Storefront, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("Ver lista (${catalogProducts.size})", fontSize = 13.sp, maxLines = 1)
+                Text("Ver lista (${catalogProducts.size})", fontSize = DesignTokens.contentText, maxLines = 1)
             }
         }
-        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
+        AppCard {
             Column(Modifier.fillMaxWidth().padding(if (compact) 7.dp else 9.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 5.dp)) {
                 Text(if (editingProductId.isBlank()) "Crear producto" else "Editar producto", color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                OutlinedTextField(catalogName, { catalogName = it.take(100) }, label = { Text("Nombre del producto") }, textStyle = androidx.compose.ui.text.TextStyle(color = Navy, fontSize = 13.sp), singleLine = true, modifier = Modifier.fillMaxWidth().height(56.dp).then(rememberKeepFocusedFieldVisible()))
+                AppTextField(catalogName, { catalogName = it.take(100) }, label = "Nombre del producto", modifier = Modifier.fillMaxWidth().then(rememberKeepFocusedFieldVisible()))
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    OutlinedTextField(catalogPrice, { catalogPrice = it.filter(Char::isDigit).take(10) }, label = { Text("Precio (\$)") }, textStyle = androidx.compose.ui.text.TextStyle(color = Navy, fontSize = 13.sp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.weight(1.35f).height(56.dp).then(rememberKeepFocusedFieldVisible()))
-                    OutlinedTextField(catalogVatRate, { catalogVatRate = it.filter { char -> char.isDigit() || char == '.' || char == ',' }.take(6) }, label = { Text("IVA (%)") }, textStyle = androidx.compose.ui.text.TextStyle(color = Navy, fontSize = 13.sp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.weight(1f).height(56.dp).then(rememberKeepFocusedFieldVisible()))
+                    AppTextField(catalogPrice, { catalogPrice = it.filter(Char::isDigit).take(10) }, label = "Precio (\$)", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1.35f).then(rememberKeepFocusedFieldVisible()))
+                    AppTextField(catalogVatRate, { catalogVatRate = it.filter { char -> char.isDigit() || char == '.' || char == ',' }.take(6) }, label = "IVA (%)", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f).then(rememberKeepFocusedFieldVisible()))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = catalogPriceIncludesVat, onCheckedChange = { catalogPriceIncludesVat = it }, modifier = Modifier.size(30.dp))
@@ -1362,7 +1346,7 @@ private fun MerchantCatalogScreen(
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Button(
+                    AppButton(
                         enabled = !savingProduct && catalogName.isNotBlank() && enteredPrice > 0 && vatRate != null,
                         onClick = {
                             scope.launch {
@@ -1398,8 +1382,7 @@ private fun MerchantCatalogScreen(
                                 savingProduct = false
                             }
                         },
-                        modifier = Modifier.weight(1f).height(if (compact) 36.dp else 38.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                        modifier = Modifier.weight(1f),
                     ) { Text(if (savingProduct) "Guardando…" else if (editingProductId.isBlank()) "Guardar producto" else "Guardar cambios", fontSize = 13.sp, maxLines = 1) }
                     if (editingProductId.isNotBlank()) TextButton(onClick = { editingProductId = ""; catalogName = ""; catalogPrice = ""; catalogVatRate = ""; catalogPriceIncludesVat = false }) { Text("Cancelar", fontSize = 13.sp) }
                 }
@@ -1407,14 +1390,14 @@ private fun MerchantCatalogScreen(
             }
         }
         if (!compact) {
-        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
+        AppCard {
             Column(Modifier.fillMaxWidth().padding(if (compact) 8.dp else 10.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 4.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Ajustes del negocio", color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                        Text("Se integran al total; el comprador no ve el detalle.", color = Muted, fontSize = 13.sp, lineHeight = 17.sp, maxLines = 2)
+                        Text("Ajuste interno sumado al total", color = Muted, fontSize = DesignTokens.contentText, lineHeight = 17.sp, maxLines = 2)
                     }
-                    Button(
+                    AppButton(
                         enabled = !savingAdjustments,
                         onClick = {
                             scope.launch {
@@ -1439,8 +1422,7 @@ private fun MerchantCatalogScreen(
                                 savingAdjustments = false
                             }
                         },
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                        modifier = Modifier.height(if (compact) 32.dp else 34.dp),
+                        modifier = Modifier,
                     ) { Text(if (savingAdjustments) "…" else "Guardar", fontSize = 13.sp) }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -1464,7 +1446,7 @@ private fun MerchantCatalogScreen(
             if (catalogProducts.isEmpty()) Text("Aún no hay productos. Créalo en esta pantalla.", color = Muted, fontSize = 13.sp)
             else LazyColumn(state = productListState, modifier = Modifier.heightIn(max = 380.dp), verticalArrangement = Arrangement.spacedBy(7.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp)) {
                 items(catalogProducts, key = { it.id }) { product ->
-                    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F9FC)), shape = RoundedCornerShape(10.dp)) {
+                    AppCard {
                         Column(Modifier.fillMaxWidth().padding(9.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text(product.name, color = Navy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             Text("IVA ${product.vatRate}% · Sin IVA ${formatCop(product.priceWithoutVat)} · Total ${formatCop(product.priceWithVat)}", color = Muted, fontSize = 13.sp, lineHeight = 17.sp, modifier = Modifier.fillMaxWidth())
@@ -1793,7 +1775,7 @@ private fun ListenerStatusScreen(isDemo: Boolean = false) {
         if (isDemo) DemoNotice()
         Text("CELULAR RECEPTOR", color = Color(0xFF3473CC), fontSize = 13.sp, letterSpacing = 1.1.sp, fontWeight = FontWeight.Bold)
         Text("Confirmación bancaria", color = Navy, fontSize = 23.sp, fontWeight = FontWeight.Bold)
-        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+        AppCard {
             Column(Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Default.NotificationsActive, null, tint = if (allowed) Green else Color(0xFFB77C36)); Spacer(Modifier.width(10.dp)); Column { Text(if (allowed) "Permiso activado" else "Permiso pendiente", color = Navy, fontWeight = FontWeight.Bold, fontSize = 13.sp); Text("Acceso a notificaciones de pago", color = Muted, fontSize = 13.sp) } }
                 Text("VeriPago solo lee el texto de las notificaciones de abonos. Nunca solicita claves ni acceso dentro de tu banco.", color = Muted, fontSize = 13.sp, lineHeight = 16.sp)
@@ -1804,7 +1786,7 @@ private fun ListenerStatusScreen(isDemo: Boolean = false) {
                 }
             }
         }
-        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+        AppCard {
             Column(Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Billeteras compatibles", color = Navy, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 Text("Nequi · Daviplata · Bre-B", color = Muted, fontSize = 13.sp)
@@ -1872,7 +1854,7 @@ private fun AdminScreen() {
             MiniMetric("Comercios registrados", "${overview?.merchantsRegistered ?: 0}", Color(0xFF8057D9), Modifier.fillMaxWidth())
         }
         item {
-            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+            AppCard {
                 Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.VolumeUp, null, tint = Color(0xFF3475D3))
@@ -1940,7 +1922,7 @@ private fun AdminRulesScreen() {
         }
         if (error.isNotBlank()) item { AdminInlineError(error) }
         item {
-            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+            AppCard {
                 Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     OutlinedTextField(sampleText, { sampleText = it }, label = { Text("Texto de notificación") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
                     OutlinedTextField(amountRegex, { amountRegex = it }, label = { Text("Expresión para monto") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
@@ -2045,7 +2027,7 @@ private fun AdminUsersScreen(currentUser: UserProfile) {
 @Composable
 private fun AdminUserCard(user: UserProfile, currentUid: String, saving: Boolean, onRoleChange: (String) -> Unit) {
     var expanded by remember(user.uid) { mutableStateOf(false) }
-    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
+    AppCard {
         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             if (user.photoUrl.isNotBlank()) {
                 AsyncImage(user.photoUrl, contentDescription = "Foto de ${user.displayName}", modifier = Modifier.size(42.dp).clip(CircleShape), contentScale = ContentScale.Crop)
@@ -2111,7 +2093,7 @@ private fun AdminPlatformScreen() {
         if (error.isNotBlank()) item { AdminInlineError(error) }
         if (message.isNotBlank()) item { Text(message, color = Green, fontSize = 13.sp) }
         item {
-            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+            AppCard {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
                     Text("Versión publicada", color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     if (loading) CircularProgressIndicator(modifier = Modifier.size(24.dp))
@@ -2124,7 +2106,7 @@ private fun AdminPlatformScreen() {
             }
         }
         item {
-            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+            AppCard {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
                     Text("Publicar app Android", color = Navy, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     Text("Selecciona el APK y confirma la versión que se mostrará en la web.", color = Muted, fontSize = 13.sp)
@@ -2201,7 +2183,7 @@ private fun OrderCard(order: OrderEntity, onItemDelivered: ((Int) -> Unit)?, onO
         (0 until json.length()).mapNotNull { index -> json.optInt(index, -1).takeIf { it >= 0 } }.toSet()
     }.getOrDefault(emptySet())
     val allItemsDelivered = items.isNotEmpty() && items.indices.all { it in deliveredIndexes }
-    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
+    AppCard {
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(order.orderCode, color = Navy, fontWeight = FontWeight.Bold, fontSize = 13.sp); Text(order.customerName.ifBlank { "Cliente" }, color = Muted, fontSize = 13.sp) }; Text(formatCop(order.totalAmount), color = Navy, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
             Spacer(Modifier.height(8.dp)); Text(if (order.paymentStatus.startsWith("VERIFIED")) "Pago verificado" else "Pago pendiente", color = if (order.paymentStatus.startsWith("VERIFIED")) Green else Color(0xFFAA7A31), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
@@ -2242,7 +2224,7 @@ private fun OrderCard(order: OrderEntity, onItemDelivered: ((Int) -> Unit)?, onO
 
 @Composable
 private fun EmptyCard(text: String) {
-    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+    AppCard(modifier = Modifier.fillMaxWidth()) {
         Text(text, color = Muted, fontSize = 13.sp, lineHeight = 17.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(22.dp))
     }
 }

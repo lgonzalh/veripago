@@ -7,6 +7,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
+import com.lantonium.veripago.ui.theme.VeriPagoShapes
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.Font
@@ -56,6 +57,7 @@ private fun VeriPagoTheme(content: @Composable () -> Unit) {
             onPrimary = Color.White,
             onBackground = Color(0xFF172A43),
         ),
+        shapes = VeriPagoShapes.material,
         typography = VeriPagoTypography,
         content = content,
     )
