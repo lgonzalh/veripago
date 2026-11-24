@@ -144,6 +144,13 @@ private data class AndroidPaymentMethod(
     val beneficiaryName: String,
 )
 
+private data class ChargeDraftLine(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val name: String = "",
+    val unitPriceText: String = "",
+    val quantityText: String = "1",
+)
+
 private const val DEMO_MERCHANT_UID = "demo-paula-local"
 
 private fun isDemoMerchant(profile: UserProfile): Boolean =
@@ -625,9 +632,7 @@ private fun ProfileScreen(profile: UserProfile) {
 @Composable
 private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, onDemoOrdersChange: (List<OrderEntity>) -> Unit, onError: (String) -> Unit) {
     val isDemo = isDemoMerchant(profile)
-    var productName by rememberSaveable { mutableStateOf("") }
-    var price by rememberSaveable { mutableStateOf("") }
-    var quantity by rememberSaveable { mutableStateOf("1") }
+    var chargeLines by remember(profile.uid) { mutableStateOf(listOf(ChargeDraftLine())) }
     var busy by remember { mutableStateOf(false) }
     var qrState by remember { mutableStateOf<Triple<AndroidPaymentMethod, String, Long>?>(null) }
     var demoSharePreview by remember { mutableStateOf<String?>(null) }
@@ -642,7 +647,15 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val installedWalletApps = remember(profile.uid) { detectInstalledWalletApps(context) }
-    val amount = (price.toLongOrNull() ?: 0L) * (quantity.toIntOrNull()?.coerceIn(1, 100) ?: 1)
+    val amount = chargeLines.sumOf { line ->
+        (line.unitPriceText.toLongOrNull() ?: 0L) * (line.quantityText.toIntOrNull()?.coerceIn(1, 100) ?: 1)
+    }
+    val chargeIsValid = chargeLines.isNotEmpty() && chargeLines.size <= 50 && chargeLines.all { line ->
+        line.name.isNotBlank() && (line.unitPriceText.toLongOrNull() ?: 0L) > 0L && (line.quantityText.toIntOrNull() ?: 0) in 1..100
+    }
+    fun updateChargeLine(id: String, update: (ChargeDraftLine) -> ChargeDraftLine) {
+        chargeLines = chargeLines.map { if (it.id == id) update(it) else it }
+    }
     val qrPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val provider = pendingQrProvider
         if (uri != null && provider.isNotBlank()) scope.launch {
@@ -707,11 +720,24 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
                         Icon(Icons.Default.QrCode2, null, tint = Color(0xFF3475D3)); Spacer(Modifier.width(8.dp))
                         Column { Text("Cobro rápido", color = Navy, fontWeight = FontWeight.Bold, fontSize = 15.sp); Text("QR inmediato o enlace por WhatsApp", color = Muted, fontSize = 10.sp) }
                     }
-                    OutlinedTextField(productName, { productName = it }, label = { Text("Producto o concepto") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                        OutlinedTextField(price, { price = it.filter(Char::isDigit).take(10) }, label = { Text("Valor (COP)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.weight(1f))
-                        OutlinedTextField(quantity, { quantity = it.filter(Char::isDigit).take(3) }, label = { Text("Cant.") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.width(90.dp))
+                    chargeLines.forEachIndexed { index, line ->
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp)).background(Color(0xFFF7F9FC)).padding(9.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                OutlinedTextField(line.name, { value -> updateChargeLine(line.id) { it.copy(name = value.take(100)) } }, label = { Text("Producto ${index + 1}") }, singleLine = true, modifier = Modifier.weight(1f))
+                                if (chargeLines.size > 1) TextButton(onClick = { chargeLines = chargeLines.filterNot { it.id == line.id } }) { Text("Quitar", fontSize = 9.sp) }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                                OutlinedTextField(line.unitPriceText, { value -> updateChargeLine(line.id) { it.copy(unitPriceText = value.filter(Char::isDigit).take(10)) } }, label = { Text("Precio unitario (COP)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.weight(1f))
+                                OutlinedTextField(line.quantityText, { value -> updateChargeLine(line.id) { it.copy(quantityText = value.filter(Char::isDigit).take(3)) } }, label = { Text("Cantidad") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.width(100.dp))
+                            }
+                            val lineTotal = (line.unitPriceText.toLongOrNull() ?: 0L) * (line.quantityText.toIntOrNull()?.coerceIn(1, 100) ?: 1)
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Subtotal del producto", color = Muted, fontSize = 9.sp)
+                                Text(formatCop(lineTotal), color = Navy, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
                     }
+                    TextButton(enabled = chargeLines.size < 50, onClick = { chargeLines = chargeLines + ChargeDraftLine() }, modifier = Modifier.align(Alignment.Start)) { Text("＋ Agregar producto") }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text("Total exacto", color = Muted, fontSize = 11.sp)
                         Text(formatCop(amount), color = Navy, fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -768,7 +794,7 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Button(
-                        enabled = !busy && amount > 0 && selectedPaymentMethod != null,
+                        enabled = !busy && chargeIsValid && selectedPaymentMethod != null,
                         onClick = {
                             scope.launch {
                                 busy = true
@@ -782,9 +808,9 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
                                                 orderCode = orderCode,
                                                 merchantId = DEMO_MERCHANT_UID,
                                                 customerUid = null,
-                                                customerName = productName.ifBlank { "Pedido de demostración" },
+                                                customerName = "Pedido de demostración",
                                                 customerPhone = "",
-                                                itemsJson = "[]",
+                                                itemsJson = serializeChargeItems(chargeLines),
                                                 totalAmount = amount,
                                                 checkoutChannel = "DEMO",
                                                 paymentStatus = "PENDING",
@@ -796,8 +822,8 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
                                         ) + demoOrders)
                                         qrState = Triple(method, orderCode, amount)
                                     } else {
-                                        val result = createInSituOrder(profile, productName.ifBlank { "Pedido rápido" }, price.toLong(), quantity.toIntOrNull()?.coerceIn(1, 100) ?: 1, selectedPaymentProvider)
-                                        qrState = Triple(result.first, result.second, amount)
+                                        val result = createInSituOrder(profile, chargeLines, selectedPaymentProvider)
+                                        qrState = Triple(result.first, result.second, result.third)
                                     }
                                 } catch (exception: Exception) { onError(exception.localizedMessage ?: "No se pudo crear el cobro.") }
                                 finally { busy = false }
@@ -809,21 +835,21 @@ private fun MerchantScreen(profile: UserProfile, demoOrders: List<OrderEntity>, 
                         else { Icon(Icons.Default.QrCode2, null); Spacer(Modifier.width(7.dp)); Text("Mostrar QR en mostrador") }
                     }
                     OutlinedButton(
-                        enabled = !busy && amount > 0,
+                        enabled = !busy && chargeIsValid,
                         onClick = {
                             scope.launch {
                                 busy = true
                                 try {
                                     if (isDemo) {
-                                        val name = productName.ifBlank { "Pedido de prueba" }
+                                        val name = chargeLines.firstOrNull()?.name?.ifBlank { "Pedido de prueba" } ?: "Pedido de prueba"
                                         val demoLink = "https://demo.veripago.local/${System.currentTimeMillis().toString().takeLast(6)}"
-                                        demoSharePreview = "Para: ${customerWhatsapp.ifBlank { "número del cliente" }}\nContacto de comercio: solo se configura en el perfil real.\n\nHola, completa tu pedido de prueba: $demoLink\n\nEste enlace es demostrativo y no recibe pagos."
+                                        demoSharePreview = "Para: ${customerWhatsapp.ifBlank { "número del cliente" }}\nProductos: ${chargeLines.joinToString { "${it.name.ifBlank { "Producto" }} × ${it.quantityText}" }}\nTotal: ${formatCop(amount)}\nContacto de comercio: solo se configura en el perfil real.\n\nHola, completa tu pedido de prueba: $demoLink\n\nEste enlace es demostrativo y no recibe pagos."
                                     } else {
                                         val customerPhone = normalizeWhatsappNumber(customerWhatsapp)
                                             ?: error("Ingresa un WhatsApp de cliente válido, por ejemplo +57 300 000 0000.")
                                         if (normalizeWhatsappNumber(merchantWhatsapp) == null) error("Guarda primero el WhatsApp del comercio en Perfil.")
-                                        val url = createShareLink(profile, productName.ifBlank { "Pedido" }, price.toLong())
-                                        val share = "Hola, completa tu pedido: $url"
+                                        val url = createShareLink(profile, chargeLines)
+                                        val share = "Hola, completa tu pedido. Total: ${formatCop(amount)}. $url"
                                         openWhatsAppShare(context, customerPhone, share)
                                     }
                                 } catch (exception: Exception) { onError(exception.localizedMessage ?: "No se pudo crear el enlace.") }
@@ -904,7 +930,7 @@ private fun parsePaymentMethods(link: DocumentSnapshot): List<AndroidPaymentMeth
     return listOf(AndroidPaymentMethod(legacyProvider, legacyQr, link.getString("paymentKeyLabel").orEmpty(), link.getString("beneficiaryName").orEmpty()))
 }
 
-private suspend fun createInSituOrder(profile: UserProfile, name: String, unitPrice: Long, quantity: Int, provider: String): Pair<AndroidPaymentMethod, String> = withContext(Dispatchers.IO) {
+private suspend fun createInSituOrder(profile: UserProfile, lines: List<ChargeDraftLine>, provider: String): Triple<AndroidPaymentMethod, String, Long> = withContext(Dispatchers.IO) {
     val firestore = FirebaseClients.firestore ?: error("Configura Firebase para crear cobros.")
     val functions = FirebaseClients.functions ?: error("Cloud Functions no está disponible.")
     val links = firestore.collection("payment_links").whereEqualTo("merchantId", profile.uid)
@@ -912,42 +938,46 @@ private suspend fun createInSituOrder(profile: UserProfile, name: String, unitPr
     val link = links.documents.firstOrNull() ?: error("Configura tu QR de pago desde VeriPago Web antes del primer cobro.")
     val paymentMethod = parsePaymentMethods(link).find { it.provider == provider }
         ?: error("Configura un QR activo para ${paymentProviderNames[provider] ?: "ese medio de pago"} desde VeriPago Web.")
-    val productId = "android-quick-item"
+    val products = lines.map { line ->
+        mapOf("id" to line.id, "name" to line.name.trim(), "unitPrice" to line.unitPriceText.toLong(), "defaultQty" to line.quantityText.toInt())
+    }
     functions.getHttpsCallable("updatePaymentLink").call(mapOf(
         "id" to link.id,
-        "schemaJson" to mapOf("products" to listOf(mapOf("id" to productId, "name" to name, "unitPrice" to unitPrice))),
-        "qrImageUrl" to paymentMethod.qrImageUrl,
-        "paymentKeyLabel" to paymentMethod.paymentKeyLabel,
-        "beneficiaryName" to paymentMethod.beneficiaryName,
-        "paymentProvider" to paymentMethod.provider,
+        "schemaJson" to mapOf("products" to products, "captureCustomerInfo" to false),
+        "paymentMethods" to parsePaymentMethods(link).map { method -> mapOf(
+            "provider" to method.provider,
+            "qrImageUrl" to method.qrImageUrl,
+            "paymentKeyLabel" to method.paymentKeyLabel,
+            "beneficiaryName" to method.beneficiaryName,
+        ) },
     )).await()
     val result = functions.getHttpsCallable("createCheckoutOrder").call(mapOf(
         "linkId" to link.id,
-        "items" to listOf(mapOf("productId" to productId, "qty" to quantity)),
+        "items" to lines.map { line -> mapOf("productId" to line.id, "qty" to line.quantityText.toInt()) },
         "customerName" to "Cliente en mostrador",
         "customerPhone" to "",
         "checkoutChannel" to "MOBILE_IN_SITU_QR",
         "paymentProvider" to paymentMethod.provider,
     )).await().data as Map<*, *>
-    paymentMethod to (result["orderCode"] as? String ?: "Pedido VeriPago")
+    Triple(paymentMethod, result["orderCode"] as? String ?: "Pedido VeriPago", lines.sumOf { it.unitPriceText.toLong() * it.quantityText.toInt() })
 }
 
-private suspend fun createShareLink(profile: UserProfile, name: String, price: Long): String = withContext(Dispatchers.IO) {
+private suspend fun createShareLink(profile: UserProfile, lines: List<ChargeDraftLine>): String = withContext(Dispatchers.IO) {
     val firestore = FirebaseClients.firestore ?: error("Configura Firebase para compartir pedidos.")
     val functions = FirebaseClients.functions ?: error("Cloud Functions no está disponible.")
     val qrLink = firestore.collection("payment_links").whereEqualTo("merchantId", profile.uid)
         .whereEqualTo("defaultMode", "IN_SITU_QR").whereEqualTo("isActive", true).limit(1).get().await().documents.firstOrNull()
         ?: error("Configura primero tu QR de pago desde VeriPago Web.")
-    val slug = "pedido-${System.currentTimeMillis().toString(36)}"
+    val productNames = lines.map { it.name.trim() }
+    val title = if (productNames.size == 1) productNames.first() else "${productNames.first()} + ${productNames.size - 1} productos"
+    val slug = "pedido-${java.util.UUID.randomUUID().toString().take(10)}"
     val result = functions.getHttpsCallable("createPaymentLink").call(mapOf(
         "slug" to slug,
-        "title" to name,
+        "title" to title.take(100),
         "defaultMode" to "WHATSAPP_LINK",
-        "schemaJson" to mapOf("products" to listOf(mapOf("id" to "android-share-item", "name" to name, "unitPrice" to price)), "captureCustomerInfo" to true),
-        "qrImageUrl" to qrLink.getString("qrImageUrl").orEmpty(),
-        "paymentKeyLabel" to qrLink.getString("paymentKeyLabel").orEmpty(),
-        "beneficiaryName" to qrLink.getString("beneficiaryName").orEmpty(),
-        "paymentProvider" to qrLink.getString("paymentProvider").orEmpty(),
+        "schemaJson" to mapOf("products" to lines.map { line ->
+            mapOf("id" to line.id, "name" to line.name.trim(), "unitPrice" to line.unitPriceText.toLong(), "defaultQty" to line.quantityText.toInt())
+        }, "captureCustomerInfo" to true),
         "paymentMethods" to parsePaymentMethods(qrLink).map { method -> mapOf(
             "provider" to method.provider,
             "qrImageUrl" to method.qrImageUrl,
@@ -956,6 +986,13 @@ private suspend fun createShareLink(profile: UserProfile, name: String, price: L
         ) },
     )).await().data as Map<*, *>
         "https://veripago-9cda6.web.app/VeriPago/${result["slug"]}"
+}
+
+private fun serializeChargeItems(lines: List<ChargeDraftLine>): String = lines.joinToString(prefix = "[", postfix = "]") { line ->
+    val safeName = line.name.trim().replace("\\", "\\\\").replace("\"", "\\\"")
+    val quantity = line.quantityText.toIntOrNull()?.coerceIn(1, 100) ?: 1
+    val unitPrice = line.unitPriceText.toLongOrNull() ?: 0L
+    "{\"name\":\"$safeName\",\"qty\":$quantity,\"unitPrice\":$unitPrice,\"subtotal\":${unitPrice * quantity}}"
 }
 
 private fun normalizeWhatsappNumber(raw: String): String? {

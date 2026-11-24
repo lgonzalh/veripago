@@ -112,11 +112,13 @@ function validateProducts(value: unknown) {
     const id = typeof product.id === 'string' ? product.id : ''
     const name = typeof product.name === 'string' ? product.name.trim().slice(0, 100) : ''
     const unitPrice = product.unitPrice
-    if (!id || ids.has(id) || !name || !Number.isSafeInteger(unitPrice) || Number(unitPrice) < 0) {
+    const defaultQty = product.defaultQty
+    if (!id || ids.has(id) || !name || !Number.isSafeInteger(unitPrice) || Number(unitPrice) < 0
+      || (defaultQty !== undefined && (!Number.isSafeInteger(defaultQty) || Number(defaultQty) < 1 || Number(defaultQty) > 100))) {
       fail('invalid-argument', 'Revisa el nombre y el precio de tus productos.')
     }
     ids.add(id)
-    return { id, name, unitPrice: Number(unitPrice) }
+    return { id, name, unitPrice: Number(unitPrice), ...(defaultQty !== undefined ? { defaultQty: Number(defaultQty) } : {}) }
   })
 }
 
