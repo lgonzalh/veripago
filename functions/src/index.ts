@@ -35,7 +35,6 @@ export const provisionGoogleProfile = onCall({ region, enforceAppCheck: false },
   const auth = requireGoogle(request)
   const email = String(auth.token.email ?? '').trim().toLowerCase()
   if (!email || auth.token.email_verified !== true) fail('unauthenticated', 'Verifica tu cuenta de Google para registrarte.')
-  const isBootstrapAdmin = email === 'lantonium@gmail.com'
   const profileRef = db.doc(`users/${auth.uid}`)
   const displayName = String(auth.token.name ?? 'Comerciante VeriPago').trim().slice(0, 100)
   const photoUrl = String(auth.token.picture ?? '').slice(0, 2048)
@@ -45,12 +44,10 @@ export const provisionGoogleProfile = onCall({ region, enforceAppCheck: false },
     if (existing.exists) {
       const data = existing.data()!
       if (data.isActive === false) fail('permission-denied', 'Tu cuenta VeriPago está desactivada.')
-      if (!isBootstrapAdmin && data.role !== 'COMERCIANTE' && data.role !== 'ADMINISTRADOR') {
+      if (data.role !== 'COMERCIANTE' && data.role !== 'ADMINISTRADOR') {
         fail('permission-denied', 'Los compradores no inician sesión. Usa el enlace o el QR del comercio.')
       }
-      const role = isBootstrapAdmin ? 'ADMINISTRADOR' : data.role
       transaction.update(profileRef, {
-        ...(role !== data.role ? { role } : {}),
         lastLoginAt: FieldValue.serverTimestamp(),
       })
       return {
@@ -58,20 +55,19 @@ export const provisionGoogleProfile = onCall({ region, enforceAppCheck: false },
         email: data.email ?? email,
         displayName: data.displayName ?? displayName,
         photoUrl: data.photoUrl ?? photoUrl,
-        role,
+        role: data.role,
         isActive: true,
         quotaMaxLinks: data.quotaMaxLinks ?? 10,
         loyaltyPoints: data.loyaltyPoints ?? 0,
       }
     }
 
-    const role = isBootstrapAdmin ? 'ADMINISTRADOR' : 'COMERCIANTE'
     const newProfile = {
       uid: auth.uid,
       email,
       displayName,
       photoUrl,
-      role,
+      role: 'COMERCIANTE',
       isActive: true,
       quotaMaxLinks: 10,
       loyaltyPoints: 0,

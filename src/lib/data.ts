@@ -23,7 +23,6 @@ export async function signInWithGoogle() {
     throw new Error('Inicia sesión con una cuenta de Google verificada.')
   }
   const profileRef = doc(db, 'users', firebaseUser.uid)
-  const isBootstrapAdmin = email.toLowerCase() === 'lantonium@gmail.com'
   try {
     return await runTransaction(db, async (transaction) => {
       const snapshot = await transaction.get(profileRef)
@@ -33,12 +32,10 @@ export async function signInWithGoogle() {
         if (existing.role !== 'COMERCIANTE' && existing.role !== 'ADMINISTRADOR') {
           throw new Error('Esta cuenta no tiene un perfil habilitado en VeriPago.')
         }
-        const role = isBootstrapAdmin ? 'ADMINISTRADOR' : existing.role
         transaction.update(profileRef, {
-          ...(role !== existing.role ? { role } : {}),
           lastLoginAt: serverTimestamp(),
         })
-        return { ...existing, role, isActive: true }
+        return { ...existing, isActive: true }
       }
 
       const profile: UserProfile = {
@@ -46,7 +43,7 @@ export async function signInWithGoogle() {
         email,
         displayName: firebaseUser.displayName?.trim() || 'Comerciante VeriPago',
         photoUrl: firebaseUser.photoURL || '',
-        role: isBootstrapAdmin ? 'ADMINISTRADOR' : 'COMERCIANTE',
+        role: 'COMERCIANTE',
         isActive: true,
         quotaMaxLinks: 10,
         loyaltyPoints: 0,

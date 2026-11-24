@@ -481,7 +481,6 @@ fun VeriPagoApp(activity: Activity) {
                             configured = FirebaseClients.isConfigured,
                             error = error,
                             onLogin = signInWithGoogle,
-                            onDemoMerchant = { demoOrders = demoMerchantOrders(); profile = demoMerchantProfile(); error = "" },
                             onRegister = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://veripago-9cda6.web.app/VeriPago/"))) },
                         )
                     } else when (signedInProfile.role) {
@@ -555,7 +554,7 @@ private fun VeriPagoAnimatedSplash(modifier: Modifier) {
 }
 
 @Composable
-private fun LandingScreen(modifier: Modifier, configured: Boolean, error: String, onLogin: () -> Unit, onDemoMerchant: () -> Unit, onRegister: () -> Unit) {
+private fun LandingScreen(modifier: Modifier, configured: Boolean, error: String, onLogin: () -> Unit, onRegister: () -> Unit) {
     Column(modifier.fillMaxSize().background(Color(0xFFF5F7FA))) {
         Column(Modifier.weight(1f).padding(horizontal = 24.dp).padding(top = 34.dp), verticalArrangement = Arrangement.Center) {
             Text("COBRA DIRECTO. CONFIRMA AL INSTANTE.", color = Green, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
@@ -577,7 +576,6 @@ private fun LandingScreen(modifier: Modifier, configured: Boolean, error: String
             if (error.isNotBlank()) Text(error, color = Color(0xFFB44743), fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             if (!configured) Text("Configura Google Sign-In en Firebase para habilitar el acceso.", color = Muted, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             TextButton(onClick = onRegister, modifier = Modifier.fillMaxWidth()) { Text("Registrar perfil de comerciante en la web") }
-            if (BuildConfig.DEBUG) TextButton(onClick = onDemoMerchant, modifier = Modifier.fillMaxWidth()) { Text("Probar espacio comerciante (demo)") }
         }
     }
 }

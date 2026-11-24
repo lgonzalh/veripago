@@ -44,8 +44,8 @@ service cloud.firestore {
     match /users/{uid} {
       allow get: if signedInWithGoogle() && (request.auth.uid == uid || isAdmin());
       allow list: if isAdmin();
-      // A verified Google account may create its own profile. The admin role is limited to the
-      // explicit bootstrap email; all other first-time users become merchants.
+      // A verified Google account may create its own merchant profile. Admin roles are assigned
+      // only from the database by an existing administrator.
       allow create: if signedInWithGoogle()
         && request.auth.uid == uid
         && request.auth.token.email_verified == true
@@ -62,19 +62,11 @@ service cloud.firestore {
         && request.resource.data.loyaltyPoints == 0
         && request.resource.data.createdAt == request.time
         && request.resource.data.lastLoginAt == request.time
-        && ((request.auth.token.email == 'lantonium@gmail.com'
-              && request.resource.data.role == 'ADMINISTRADOR')
-          || (request.auth.token.email != 'lantonium@gmail.com'
-              && request.resource.data.role == 'COMERCIANTE'));
+        && request.resource.data.role == 'COMERCIANTE';
       allow update: if isAdmin()
         || (signedInWithGoogle() && request.auth.uid == uid
           && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['displayName', 'photoUrl', 'lastLoginAt']))
-        || (signedInWithGoogle() && request.auth.uid == uid
-          && request.auth.token.email == 'lantonium@gmail.com'
-          && request.resource.data.role == 'ADMINISTRADOR'
-          && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['role', 'lastLoginAt']));
+            .hasOnly(['displayName', 'photoUrl', 'lastLoginAt']));
       allow delete: if isAdmin();
 
       match /settings/{settingId} {

@@ -66,7 +66,7 @@ describe('Firestore security rules', () => {
     await assertFails(getDocs(collection(guest, 'public_payment_links')))
   })
 
-  it('allows first sign-in to create a merchant profile and restricts admin bootstrap to the allowlisted email', async () => {
+  it('allows first sign-in to create a merchant profile and prevents self-assigned admin roles', async () => {
     const merchantDb = googleUser('new-merchant', 'merchant@example.test')
     await assertSucceeds(setDoc(
       doc(merchantDb, 'users', 'new-merchant'),
@@ -74,7 +74,7 @@ describe('Firestore security rules', () => {
     ))
 
     const adminDb = googleUser('bootstrap-admin', 'lantonium@gmail.com')
-    await assertSucceeds(setDoc(
+    await assertFails(setDoc(
       doc(adminDb, 'users', 'bootstrap-admin'),
       newProfile('bootstrap-admin', 'lantonium@gmail.com', 'ADMINISTRADOR'),
     ))
