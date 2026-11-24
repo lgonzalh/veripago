@@ -24,8 +24,8 @@ android {
         applicationId = "com.lantonium.veripago"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.0.0-alpha.2"
+        versionCode = 3
+        versionName = "1.0.0-alpha.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "FIREBASE_API_KEY", "\"${configuredValue("firebaseApiKey", "VERIPAGO_FIREBASE_API_KEY")}\"")
         buildConfigField("String", "FIREBASE_APP_ID", "\"${configuredValue("firebaseAppId", "VERIPAGO_FIREBASE_APP_ID")}\"")
