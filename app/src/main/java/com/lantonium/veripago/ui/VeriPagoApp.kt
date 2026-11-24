@@ -672,6 +672,7 @@ private fun FeatureLine(icon: androidx.compose.ui.graphics.vector.ImageVector, l
 @Composable
 private fun ProfileScreen(profile: UserProfile) {
     val isDemo = isDemoMerchant(profile)
+    val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var whatsappNumber by rememberSaveable(profile.uid) { mutableStateOf("") }
@@ -722,31 +723,34 @@ private fun ProfileScreen(profile: UserProfile) {
         }
     }
     Column(
-        modifier = Modifier.fillMaxSize().background(Color(0xFFF5F7FA)).imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(9.dp),
+        modifier = Modifier.fillMaxSize().background(Color(0xFFF5F7FA)).imePadding()
+            .padding(horizontal = 10.dp, vertical = if (keyboardVisible) 2.dp else 6.dp),
+        verticalArrangement = Arrangement.spacedBy(if (keyboardVisible) 4.dp else 7.dp),
     ) {
-        if (isDemo) DemoNotice()
-        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (profile.photoUrl.isNotBlank()) {
-                    AsyncImage(profile.photoUrl, contentDescription = "Foto de ${profile.displayName}", modifier = Modifier.size(52.dp).clip(CircleShape), contentScale = ContentScale.Crop)
-                } else {
-                    Box(Modifier.size(52.dp).clip(CircleShape).background(Navy), contentAlignment = Alignment.Center) {
-                        Text(profile.displayName.firstOrNull()?.uppercase() ?: "G", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+        if (!keyboardVisible) {
+            if (isDemo) DemoNotice()
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (profile.photoUrl.isNotBlank()) {
+                        AsyncImage(profile.photoUrl, contentDescription = "Foto de ${profile.displayName}", modifier = Modifier.size(46.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+                    } else {
+                        Box(Modifier.size(46.dp).clip(CircleShape).background(Navy), contentAlignment = Alignment.Center) {
+                            Text(profile.displayName.firstOrNull()?.uppercase() ?: "G", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(profile.displayName.ifBlank { "Usuario de Google" }, color = Navy, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                    Text(profile.email, color = Muted, fontSize = 10.sp, maxLines = 1)
-                    Text(if (profile.role == "ADMINISTRADOR") "Administrador" else "Comerciante", color = Navy, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.width(10.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text(profile.displayName.ifBlank { "Usuario de Google" }, color = Navy, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text(profile.email, color = Muted, fontSize = 10.sp, maxLines = 1)
+                        Text(if (profile.role == "ADMINISTRADOR") "Administrador" else "Comerciante", color = Navy, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    }
                 }
             }
         }
         if (profile.role == "COMERCIANTE") {
             Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
-                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    Text("WhatsApp del comercio", color = Navy, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Column(Modifier.fillMaxWidth().padding(if (keyboardVisible) 8.dp else 10.dp), verticalArrangement = Arrangement.spacedBy(if (keyboardVisible) 4.dp else 6.dp)) {
+                    Text("WhatsApp del comercio", color = Navy, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     if (isDemo) {
                         Text("En la prueba no se guarda ni se publica ningún número.", color = Color(0xFFB54743), fontSize = 10.sp)
                     } else {
@@ -759,7 +763,7 @@ private fun ProfileScreen(profile: UserProfile) {
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                                 singleLine = true,
                                 enabled = !loadingContact && !savingContact,
-                                modifier = Modifier.weight(1f).height(58.dp),
+                                modifier = Modifier.weight(1f).height(56.dp),
                             )
                             Button(
                                 enabled = !loadingContact && !savingContact && whatsappDraft != whatsappNumber,
@@ -781,15 +785,15 @@ private fun ProfileScreen(profile: UserProfile) {
                                         savingContact = false
                                     }
                                 },
-                                modifier = Modifier.height(56.dp),
+                                modifier = Modifier.height(52.dp),
                             ) { Text(if (loadingContact) "…" else if (savingContact) "…" else "Guardar", fontSize = 10.sp) }
                         }
                         if (contactMessage.isNotBlank()) Text(contactMessage, color = if (contactMessage.startsWith("No se pudo") || contactMessage.startsWith("Ingresa")) Color(0xFFB54743) else Green, fontSize = 9.sp, maxLines = 1)
                     }
                 }
             }
-            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
-                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            if (!keyboardVisible) Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+                Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Códigos QR", color = Navy, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                         if (loadingContact) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
@@ -990,7 +994,7 @@ private fun MerchantScreen(
             }
         }
         Card(
-            modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
+            modifier = Modifier.fillMaxWidth().weight(1f),
             colors = CardDefaults.cardColors(containerColor = Color.White),
             shape = RoundedCornerShape(16.dp),
         ) {
@@ -1292,13 +1296,11 @@ private fun MerchantCatalogScreen(
         }.onFailure { adjustmentMessage = "No se pudieron cargar los ajustes." }
     }
 
-    LazyColumn(
-        state = rememberLazyListState(),
-        modifier = Modifier.fillMaxSize().background(Color(0xFFF5F7FA)).imePadding(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = if (compact) 4.dp else 8.dp),
-        verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 7.dp),
+    Column(
+        modifier = Modifier.fillMaxSize().background(Color(0xFFF5F7FA)).imePadding()
+            .padding(horizontal = 10.dp, vertical = if (compact) 2.dp else 6.dp),
+        verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp),
     ) {
-        item {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text("Productos", color = Navy, fontSize = if (compact) 18.sp else 20.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -1314,11 +1316,8 @@ private fun MerchantCatalogScreen(
                 Text("Ver lista (${catalogProducts.size})", fontSize = 10.sp, maxLines = 1)
             }
         }
-        }
-
-        item {
         Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
-            Column(Modifier.fillMaxWidth().padding(if (compact) 8.dp else 10.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 5.dp)) {
+            Column(Modifier.fillMaxWidth().padding(if (compact) 7.dp else 9.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 5.dp)) {
                 Text(if (editingProductId.isBlank()) "Crear producto" else "Editar producto", color = Navy, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 OutlinedTextField(catalogName, { catalogName = it.take(100) }, label = { Text("Nombre del producto") }, textStyle = androidx.compose.ui.text.TextStyle(color = Navy, fontSize = 16.sp), singleLine = true, modifier = Modifier.fillMaxWidth().height(56.dp).then(rememberKeepFocusedFieldVisible()))
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -1383,9 +1382,7 @@ private fun MerchantCatalogScreen(
                 if (catalogMessage.isNotBlank()) Text(catalogMessage, color = if (catalogMessage.startsWith("No se pudo") || catalogMessage.startsWith("El IVA")) Color(0xFFB54743) else Green, fontSize = 10.sp, maxLines = 1)
             }
         }
-        }
-
-        item {
+        if (!compact) {
         Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
             Column(Modifier.fillMaxWidth().padding(if (compact) 8.dp else 10.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 4.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
